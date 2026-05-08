@@ -66,6 +66,13 @@ const PERM_UPGRADES = {
 	"perm_coin_boost": {"name": "Coin Boost", "max_level": 3, "costs": [250, 600, 1500], "desc": "+10% all coins per lvl"},
 }
 
+# --- Consumables definitions ---
+const CONSUMABLES = {
+	"freeze_bomb": {"name": "Freeze Bomb", "icon": "🧊", "cost": 150, "desc": "Instantly resets heat to 0."},
+	"repair_kit": {"name": "Nano-Repair Kit", "icon": "🧰", "cost": 250, "desc": "Instantly restores 50 durability."},
+	"frenzy_juice": {"name": "Frenzy Juice", "icon": "⚡", "cost": 400, "desc": "Triggers Frenzy mode for 6s."},
+}
+
 func reset():
 	depth = 0.0
 	heat = 0.0
@@ -229,6 +236,26 @@ func trigger_frenzy():
 	frenzy_mode = true
 	frenzy_timer = FRENZY_DURATION
 	frenzy_started.emit()
+
+func trigger_consumable(item_id: String) -> bool:
+	if not game_active: return false
+	var sm = get_node_or_null("/root/SaveManager")
+	if not sm or not sm.use_item(item_id):
+		return false # Item not owned
+		
+	match item_id:
+		"freeze_bomb":
+			heat = 0
+			heat_changed.emit(heat, max_heat)
+		"repair_kit":
+			durability = min(durability + 50, max_durability)
+			durability_changed.emit(durability, max_durability)
+		"frenzy_juice":
+			trigger_frenzy()
+			
+	if has_node("/root/AudioManager"):
+		get_node("/root/AudioManager").play_upgrade_sound()
+	return true
 
 func increment_combo():
 	combo_counter += 1

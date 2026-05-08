@@ -7,8 +7,28 @@ func _ready():
 	if has_node("ColorRect"):
 		$ColorRect.color = Color(0.05, 0.08, 0.12, 1.0)
 	
-	_style_all_buttons(self )
+	_style_all_buttons(self)
 	_create_settings_panel()
+	_create_stats_display()
+
+func _create_stats_display():
+	var sm = get_node_or_null("/root/SaveManager")
+	if not sm: return
+	
+	var coins = sm.save_data.get("total_coins", 0)
+	var best = sm.save_data.get("best_depth", 0.0)
+	
+	var depth_lbl = find_child("BestDepthLabel", true, false)
+	if depth_lbl:
+		depth_lbl.text = "🏆 BEST DEPTH: " + str(int(best)) + "m"
+		depth_lbl.add_theme_font_size_override("font_size", 38)
+		depth_lbl.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+		
+	var coins_lbl = find_child("TotalCoinsLabel", true, false)
+	if coins_lbl:
+		coins_lbl.text = "💰 TOTAL COINS: " + str(coins)
+		coins_lbl.add_theme_font_size_override("font_size", 38)
+		coins_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
 
 func _style_all_buttons(node: Node):
 	for child in node.get_children():
@@ -118,4 +138,4 @@ func _on_start_pressed():
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _on_shop_pressed():
-	get_tree().change_scene_to_file("res://scenes/upgrade_shop.tscn")
+	get_tree().change_scene_to_file("res://scenes/permanent_shop.tscn")

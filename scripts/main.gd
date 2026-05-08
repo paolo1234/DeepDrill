@@ -230,13 +230,19 @@ func show_game_over(reason: String):
 	btn_style.bg_color = Color(0.2, 0.6, 0.3, 1)
 	btn_style.corner_radius_top_left = 10; btn_style.corner_radius_bottom_right = 10
 	restart_btn.add_theme_stylebox_override("normal", btn_style)
-	restart_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main.tscn"))
+	restart_btn.pressed.connect(func(): 
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/main.tscn")
+	)
 	vbox.add_child(restart_btn)
 
 	var menu_btn = Button.new()
 	menu_btn.text = "ABANDON MISSION"
 	menu_btn.flat = true
-	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
+	menu_btn.pressed.connect(func(): 
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	)
 	vbox.add_child(menu_btn)
 
 func _add_stat_row(parent, label_text, value_text):

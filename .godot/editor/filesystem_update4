@@ -8,3 +8,5 @@ res://scripts/main.gd
 res://scripts/tutorial_overlay.gd
 res://scripts/upgrade_shop.gd
 res://scripts/grid.gd
+res://scripts/save_manager.gd
+res://scripts/permanent_shop.gd
