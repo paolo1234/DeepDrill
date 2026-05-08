@@ -1,10 +1,11 @@
 extends Node2D
 
 const COLS = 7
-const COL_WIDTH = 154.0  # 1080 / 7
-const ROW_HEIGHT = 48.0
-const VISIBLE_ROWS = 45
-const BUFFER_ROWS = 15
+const COL_WIDTH = 154.0
+const ROW_HEIGHT = 120.0
+const GRID_OFFSET_X = 0.0
+const VISIBLE_ROWS = 20
+const BUFFER_ROWS = 10
 
 var grid: Array = []
 var rng = RandomNumberGenerator.new()
@@ -98,26 +99,32 @@ func generate_row(idx: int) -> Array:
 	return row
 
 func _create_block(type: int) -> Dictionary:
-	var block = {"type": type, "is_dug": false, "break_anim": 0.0}
+	var block = {"type": type, "is_dug": false, "health": 1.0, "max_health": 1.0}
 	match type:
 		1: # Dirt
-			block["color"] = Color(0.545, 0.412, 0.078)
-			block["heat"] = 1; block["wear"] = 1; block["coins"] = 1
+			block["color"] = Color(0.45, 0.3, 0.15)
+			block["heat"] = 2; block["wear"] = 0.5; block["coins"] = 1
+			block["health"] = 0.2; block["max_health"] = 0.2
 		2: # Stone
-			block["color"] = Color(0.502, 0.502, 0.502)
-			block["heat"] = 3; block["wear"] = 2; block["coins"] = 3
+			block["color"] = Color(0.5, 0.5, 0.5)
+			block["heat"] = 5; block["wear"] = 2.0; block["coins"] = 3
+			block["health"] = 1.2; block["max_health"] = 1.2
 		3: # Granite
-			block["color"] = Color(0.29, 0.29, 0.29)
-			block["heat"] = 5; block["wear"] = 4; block["coins"] = 5
+			block["color"] = Color(0.3, 0.3, 0.35)
+			block["heat"] = 10; block["wear"] = 5.0; block["coins"] = 8
+			block["health"] = 3.0; block["max_health"] = 3.0
 		4: # Gold
-			block["color"] = Color(1, 0.843, 0)
-			block["heat"] = 2; block["wear"] = 1; block["coins"] = 15
+			block["color"] = Color(1, 0.8, 0.2)
+			block["heat"] = -5; block["wear"] = 0.5; block["coins"] = 25
+			block["health"] = 0.5; block["max_health"] = 0.5
 		5: # Diamond
-			block["color"] = Color(0, 1, 1)
-			block["heat"] = 6; block["wear"] = 3; block["coins"] = 50
+			block["color"] = Color(0.3, 0.9, 1.0)
+			block["heat"] = -20; block["wear"] = 1.0; block["coins"] = 100
+			block["health"] = 1.0; block["max_health"] = 1.0
 		6: # Lava
-			block["color"] = Color(1, 0.27, 0)
-			block["heat"] = 25; block["wear"] = 0; block["coins"] = 0
+			block["color"] = Color(1, 0.3, 0)
+			block["heat"] = 40; block["wear"] = 0; block["coins"] = 0
+			block["health"] = 0.1; block["max_health"] = 0.1
 	return block
 
 func update_grid(drill_y: float):
@@ -173,29 +180,41 @@ func _draw():
 					1: # Dirt
 						for i in range(3):
 							var dx = x + padding + 10 + i * 40
-							var dy = y + padding + 10 + fmod(i * 17, 25)
-							draw_rect(Rect2(dx, dy, 6, 6), base_c.darkened(0.3), true)
+							var dy = y + padding + 10 + fmod(i * 17, ROW_HEIGHT - 20)
+							draw_rect(Rect2(dx, dy, 8, 8), base_c.darkened(0.3), true)
 					2: # Stone
-						draw_line(Vector2(x + 15, y + 10), Vector2(x + COL_WIDTH - 25, y + ROW_HEIGHT - 15), base_c.darkened(0.3), 3.0)
+						draw_line(Vector2(x + 15, y + 15), Vector2(x + COL_WIDTH - 25, y + ROW_HEIGHT - 25), base_c.darkened(0.3), 4.0)
 					3: # Granite
-						draw_rect(Rect2(x+10, y+10, 10, 10), base_c.darkened(0.4), true)
-						draw_rect(Rect2(x+COL_WIDTH-30, y+20, 15, 15), base_c.darkened(0.4), true)
+						draw_rect(Rect2(x+15, y+15, 20, 20), base_c.darkened(0.4), true)
+						draw_rect(Rect2(x+COL_WIDTH-45, y+ROW_HEIGHT-45, 25, 25), base_c.darkened(0.4), true)
 					4: # Gold
 						for i in range(3):
-							var sx = x + 20 + i * 35
-							var sy = y + 15 + fmod(i * 13, 10)
-							draw_rect(Rect2(sx, sy, 12, 12), Color(1, 1, 0.4), true)
-							draw_rect(Rect2(sx+2, sy+2, 4, 4), Color(1, 1, 1), true) # Sparkle
+							var sx = x + 30 + i * 40
+							var sy = y + 20 + fmod(i * 13, 30)
+							draw_rect(Rect2(sx, sy, 18, 18), Color(1, 1, 0.4), true)
+							draw_rect(Rect2(sx+4, sy+4, 6, 6), Color(1, 1, 1), true) # Sparkle
 					5: # Diamond
 						var cx = x + COL_WIDTH / 2
-						var cy = y + ROW_HEIGHT / 2 - 3
-						var p = PackedVector2Array([Vector2(cx, cy-15), Vector2(cx+15, cy), Vector2(cx, cy+15), Vector2(cx-15, cy)])
+						var cy = y + ROW_HEIGHT / 2
+						var p = PackedVector2Array([Vector2(cx, cy-30), Vector2(cx+25, cy), Vector2(cx, cy+30), Vector2(cx-25, cy)])
 						draw_colored_polygon(p, Color(0.2, 1, 1))
-						draw_circle(Vector2(cx-4, cy-4), 3, Color(1,1,1))
+						draw_circle(Vector2(cx-8, cy-8), 6, Color(1,1,1))
 					6: # Lava
-						var time = float(row_idx) * 0.3
-						for i in range(3):
-							var bx = x + 20 + fmod(i * 47 + time * 10, COL_WIDTH - 40)
-							var by = y + 12 + fmod(i * 19, ROW_HEIGHT - 24)
-							var bsize = 6 + sin(time + i) * 3
+						var time = Time.get_ticks_msec() * 0.002 + float(row_idx)
+						for i in range(4):
+							var bx = x + 30 + fmod(i * 50 + time * 20, COL_WIDTH - 60)
+							var by = y + 20 + fmod(i * 25, ROW_HEIGHT - 40)
+							var bsize = 8 + sin(time + i) * 4
 							draw_circle(Vector2(bx, by), bsize, Color(1, 0.8, 0.2))
+				
+				# CRACKS based on health
+				var health_pct = block["health"] / block["max_health"]
+				if health_pct < 0.8:
+					var crack_c = Color(0, 0, 0, 0.4)
+					draw_line(Vector2(x + 20, y + 20), Vector2(x + 60, y + 50), crack_c, 3.0)
+				if health_pct < 0.5:
+					var crack_c = Color(0, 0, 0, 0.5)
+					draw_line(Vector2(x + 100, y + 30), Vector2(x + 40, y + 90), crack_c, 3.0)
+				if health_pct < 0.2:
+					var crack_c = Color(0, 0, 0, 0.6)
+					draw_line(Vector2(x + 30, y + 100), Vector2(x + 120, y + 40), crack_c, 3.0)

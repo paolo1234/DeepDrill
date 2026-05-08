@@ -5,6 +5,11 @@ var shake_decay: float = 5.0
 var camera: Camera2D = null
 
 func _process(delta):
+	if camera == null or not is_instance_valid(camera):
+		var scene = get_tree().current_scene
+		if scene:
+			camera = scene.get_viewport().get_camera_2d()
+	
 	if shake_intensity > 0:
 		shake_intensity = max(0.0, shake_intensity - shake_decay * delta)
 		if camera and is_instance_valid(camera):

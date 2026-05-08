@@ -1,11 +1,11 @@
 extends Node2D
 
 const COLS = 7
-const COL_WIDTH = 154.0  # 1080 / 7 = ~154
+const COL_WIDTH = 154.0
 const GRID_OFFSET_X = 0.0
 const BASE_SPEED = 80.0
-const DRILL_WIDTH = 48.0
-const DRILL_HEIGHT = 64.0
+const DRILL_WIDTH = 80.0
+const DRILL_HEIGHT = 100.0
 
 var speed: float = BASE_SPEED
 var target_col: int = 3
@@ -62,50 +62,151 @@ func _spawn_start_text():
 func _col_to_x(col: int) -> float:
 	return GRID_OFFSET_X + col * COL_WIDTH + COL_WIDTH / 2.0
 
+var is_drilling: bool = false
+var current_drill_target = null
+var frenzy_count: int = 0
+var frenzy_timer: float = 0.0
+var frenzy_mode: bool = false
+var last_mine_time: float = 0.0
+
 func _process(delta):
 	if not gs or not gs.game_active:
 		return
 
-	# Speed increases with depth
+	# Frenzy logic
+	if frenzy_mode:
+		frenzy_timer -= delta
+		if frenzy_timer <= 0:
+			frenzy_mode = false
+			frenzy_count = 0
+	elif Time.get_ticks_msec() / 1000.0 - last_mine_time > 3.0:
+		frenzy_count = 0 # reset combo if too slow
+
+	# Speed logic
 	var speed_mult = 1.0 + gs.depth / 1000.0
+	if frenzy_mode: speed_mult *= 1.5
+	
 	speed = BASE_SPEED * speed_mult
 	
 	if speed_penalty > 0:
-		speed_penalty = max(0.0, speed_penalty - delta * 2.5) # recovers over time
+		speed_penalty = max(0.0, speed_penalty - delta * 2.5)
 
 	var final_speed = speed * max(0.2, 1.0 - speed_penalty)
 
-	# Move down
-	position.y += final_speed * delta
-	gs.set_depth(gs.depth + final_speed * delta * 0.05)  # ~1m per 20px
-	gs.passive_cooling(delta)
-
-	# Handle smooth horizontal movement
-	var target_x = _col_to_x(target_col)
-	current_x = lerp(current_x, target_x, 12.0 * delta)
-	position.x = current_x
-
-	# Try to get grid reference
 	if not grid_ref:
 		grid_ref = get_parent().get_node_or_null("Grid")
 
-	# Drill blocks at current position
+	# Movement logic
+	is_drilling = false
+	var target_x = _col_to_x(target_col)
+	var lateral_speed = 12.0
+	if grid_ref and _check_side_collision(target_x):
+		lateral_speed = 2.0
+		is_drilling = true
+	
+	current_x = lerp(current_x, target_x, lateral_speed * delta)
+	position.x = current_x
+
 	if grid_ref:
 		grid_ref.update_grid(position.y)
-		_try_drill_block()
-
-	# Upgrade shop check
-	gs.check_upgrade_shop()
+		var collision_targets = _get_all_collision_targets()
+		
+		if not collision_targets.is_empty():
+			is_drilling = true
+			for target in collision_targets:
+				_process_drilling(target, delta)
+			
+			position.x += randf_range(-4, 4)
+			position.y += randf_range(-1, 1)
+			
+			var effects = get_node_or_null("/root/Effects")
+			if effects:
+				effects.shake(1.0 if frenzy_mode else 0.4)
+		else:
+			position.y += final_speed * delta
+			gs.set_depth(gs.depth + final_speed * delta * 0.05)
+			if not frenzy_mode:
+				gs.passive_cooling(delta)
 
 	# Animate drill
 	drill_anim_timer += delta
-	if drill_anim_timer >= 0.08:
+	var anim_speed = 0.02 if is_drilling else 0.08
+	if frenzy_mode: anim_speed *= 0.5
+	if drill_anim_timer >= anim_speed:
 		drill_anim_timer = 0.0
 		drill_anim_frame = (drill_anim_frame + 1) % 4
 		queue_redraw()
 
-	# Update spark particles
 	_update_particles(delta)
+	if is_drilling or frenzy_mode:
+		_spawn_drill_sparks()
+
+func _check_side_collision(t_x):
+	var dir = sign(t_x - position.x)
+	if abs(dir) < 0.1: return false
+	
+	var side_rect = Rect2(position.x + dir * DRILL_WIDTH/2.0, position.y - DRILL_HEIGHT/4.0, 5, DRILL_HEIGHT/2.0)
+	var row = grid_ref.get_row_at_y(side_rect.position.y + side_rect.size.y/2.0)
+	var col = int((side_rect.position.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH)
+	
+	var block = grid_ref.get_block_at_row_col(row, col)
+	return block != null and not block.get("is_dug", false)
+
+func _get_all_collision_targets():
+	var targets = []
+	# Check bottom
+	var b_target = _check_vertical_collision()
+	if b_target: targets.append(b_target)
+	
+	# Check sides for "lateral mining"
+	var drill_rect = Rect2(position.x - DRILL_WIDTH/2.0, position.y - DRILL_HEIGHT/2.0, DRILL_WIDTH, DRILL_HEIGHT)
+	var row = grid_ref.get_row_at_y(position.y)
+	
+	for c in [int((drill_rect.position.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH), 
+			  int((drill_rect.position.x + drill_rect.size.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH)]:
+		var block = grid_ref.get_block_at_row_col(row, c)
+		if block and not block.get("is_dug", false):
+			var found = false
+			for t in targets:
+				if t["block"] == block: found = true; break
+			if not found:
+				targets.append({"block": block, "row": row, "col": c})
+	return targets
+
+func _spawn_drill_sparks():
+	var spark = {
+		"x": position.x + randf_range(-DRILL_WIDTH/2, DRILL_WIDTH/2),
+		"y": position.y + DRILL_HEIGHT / 2.0,
+		"vx": randf_range(-100, 100),
+		"vy": randf_range(-150, -50),
+		"life": 0.4,
+		"max_life": 0.4,
+		"color": Color(1, 0.9, 0.4, 1),
+		"size": randf_range(3, 6)
+	}
+	spark_particles.append(spark)
+
+func _check_vertical_collision():
+	var drill_rect = Rect2(position.x - DRILL_WIDTH/2.0 + 10, position.y + DRILL_HEIGHT/3.0, DRILL_WIDTH - 20, 10)
+	var row = grid_ref.get_row_at_y(drill_rect.position.y + drill_rect.size.y)
+	var col = int((position.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH)
+	
+	var block = grid_ref.get_block_at_row_col(row, col)
+	if block and not block.get("is_dug", false):
+		return {"block": block, "row": row, "col": col}
+	return null
+
+func _process_drilling(target, delta):
+	var block = target["block"]
+	# Drilling damage based on speed and upgrades
+	var damage = delta * (1.5 if frenzy_mode else 1.0) * (1.0 + gs.depth / 2000.0) 
+	block["health"] -= damage
+	
+	if randf() < 0.2:
+		_spawn_break_particles(target["col"], target["row"], block["color"])
+		
+	if block["health"] <= 0:
+		_drill_block(block, target["row"], target["col"])
 
 func _unhandled_input(event):
 	if not gs or not gs.game_active:
@@ -123,56 +224,52 @@ func _unhandled_input(event):
 		target_col = min(COLS - 1, target_col + 1)
 
 func _try_drill_block():
-	if not grid_ref or not gs.game_active:
-		return
-	
-	var drill_rect = Rect2(position.x - DRILL_WIDTH/2.0, position.y - DRILL_HEIGHT/2.0, DRILL_WIDTH, DRILL_HEIGHT)
-	
-	var top_row = grid_ref.get_row_at_y(drill_rect.position.y)
-	var bottom_row = grid_ref.get_row_at_y(drill_rect.position.y + drill_rect.size.y)
-	
-	var left_col = max(0, int((drill_rect.position.x - DRILL_WIDTH/2.0 - GRID_OFFSET_X) / COL_WIDTH))
-	var right_col = min(COLS - 1, int((drill_rect.position.x + DRILL_WIDTH/2.0 - GRID_OFFSET_X) / COL_WIDTH))
-	
-	for r in range(top_row, bottom_row + 1):
-		for c in range(left_col, right_col + 1):
-			var block = grid_ref.get_block_at_row_col(r, c)
-			if block and not block.get("is_dug", false):
-				_drill_block(block, r, c)
+	# Deprecated by new collision logic but keeping signature if needed
+	pass
 
 func _drill_block(block: Dictionary, row: int, col: int):
 	if block == null or block.get("is_dug", false):
 		return
+	
 	block["is_dug"] = true
 	
-	var block_type = block.get("type", 1)
-	var heat = block.get("heat", 0)
-	var wear = block.get("wear", 0)
-	var coins = block.get("coins", 0)
+	# Frenzy progress
+	last_mine_time = Time.get_ticks_msec() / 1000.0
+	frenzy_count += 1
+	if frenzy_count >= 10 and not frenzy_mode:
+		frenzy_mode = true
+		frenzy_timer = 5.0
+		var effects = get_node_or_null("/root/Effects")
+		if effects:
+			effects.spawn_floating_text(position, "FRENZY!", Color.ORANGE_RED)
+			effects.shake(2.0)
 	
-	# Apply effects
-	gs.add_heat(heat)
-	gs.add_wear(wear)
-	gs.add_coins(coins)
+	# Collect rewards
+	gs.add_coins(block.get("coins", 0))
+	gs.add_heat(block.get("heat", 0))
+	gs.add_wear(block.get("wear", 0))
 	
-	# Visual Feedback (Floating text and shake)
+	# Spawn particles
+	_spawn_break_particles(col, row, block["color"])
+	
+	# Shake camera on break
 	var effects = get_node_or_null("/root/Effects")
 	if effects:
-		var block_center = Vector2(GRID_OFFSET_X + col * COL_WIDTH + COL_WIDTH/2.0, row * grid_ref.ROW_HEIGHT + grid_ref.ROW_HEIGHT/2.0)
-		var spawn_pos = position + Vector2(randf_range(-20, 20), -30)
+		effects.shake(1.5)
 		
-		if coins > 0:
-			effects.spawn_floating_text(spawn_pos, "+%d 🟡" % coins, Color(1, 0.9, 0.2))
-			spawn_pos.y -= 25
-		if heat > 2:
-			effects.spawn_floating_text(spawn_pos, "+%d 🔥" % heat, Color(1, 0.3, 0.1))
-			spawn_pos.y -= 25
-		if wear > 1:
-			effects.spawn_floating_text(spawn_pos, "-%d 🔧" % wear, Color(0.7, 0.7, 0.8))
-			
+		var spawn_pos = position + Vector2(randf_range(-20, 20), -30)
+		# Show heat/coins/wear as floating text
+		if block.get("heat", 0) != 0:
+			var h = block["heat"]
+			var color = Color.RED if h > 0 else Color.CYAN
+			effects.spawn_floating_text(spawn_pos, str(h) + " 🔥", color)
+		if block.get("coins", 0) > 0:
+			effects.spawn_floating_text(spawn_pos + Vector2(0, -25), "+" + str(block["coins"]) + " 🪙", Color.GOLD)
+		
 		# Screen shake and speed penalty for hard blocks
-		if block_type in [2, 3, 5]: # Stone, Granite, Diamond
-			effects.shake(block_type * 1.5)
+		var b_type = block.get("type", 1)
+		if b_type in [2, 3, 5]: # Stone, Granite, Diamond
+			effects.shake(b_type * 1.5)
 			speed_penalty = min(0.8, speed_penalty + 0.3)
 	
 	# Spawn break particles
@@ -236,62 +333,64 @@ func _update_particles(delta):
 		spark_particles.append(spark)
 
 func _draw():
-	# Draw drill body with bevel
-	var body_rect = Rect2(-DRILL_WIDTH / 2, -DRILL_HEIGHT / 2, DRILL_WIDTH, DRILL_HEIGHT * 0.6)
-	var body_color = Color(0.5, 0.5, 0.6)
-	draw_rect(body_rect, body_color.darkened(0.5), true) # Shadow
-	var body_inner = Rect2(body_rect.position.x, body_rect.position.y, body_rect.size.x, body_rect.size.y - 4)
-	draw_rect(body_inner, body_color, true)
+	# --- DRAWING A COOL CARTOON DRILL MECHA ---
 	
-	# Metallic highlight
-	var highlight = Rect2(-DRILL_WIDTH / 2 + 4, -DRILL_HEIGHT / 2 + 4, 8, DRILL_HEIGHT * 0.5 - 4)
-	draw_rect(highlight, Color(0.8, 0.8, 0.9, 0.5), true)
+	# 1. Tracks/Side Base
+	var track_color = Color(0.2, 0.2, 0.25)
+	draw_rect(Rect2(-DRILL_WIDTH/2 - 4, -DRILL_HEIGHT/4, 12, DRILL_HEIGHT/2), track_color, true) # Left track
+	draw_rect(Rect2(DRILL_WIDTH/2 - 8, -DRILL_HEIGHT/4, 12, DRILL_HEIGHT/2), track_color, true) # Right track
 	
-	# Draw drill bit (triangle, rotates)
-	var bit_top_y = DRILL_HEIGHT * 0.1
-	var bit_bottom_y = DRILL_HEIGHT / 2
-	var bit_width = DRILL_WIDTH / 2
+	# 2. Main Body (Dome/Capsule)
+	var body_color = Color(0.4, 0.4, 0.5)
+	if frenzy_mode:
+		body_color = Color(0.8, 0.9, 1.0)
+	var body_pts = PackedVector2Array()
+	for i in range(18):
+		var ang = PI + (i * PI / 17.0)
+		body_pts.append(Vector2(cos(ang) * DRILL_WIDTH/2, sin(ang) * DRILL_HEIGHT/2 - 5))
+	body_pts.append(Vector2(DRILL_WIDTH/2, 5))
+	body_pts.append(Vector2(-DRILL_WIDTH/2, 5))
+	draw_colored_polygon(body_pts, body_color)
 	
-	# Animated rotation effect via alternating bit shape
-	var offset = sin(drill_anim_frame * PI / 2.0) * 3
-	var bit_points = PackedVector2Array([
-		Vector2(-bit_width / 2 + offset, bit_top_y),
-		Vector2(bit_width / 2 + offset, bit_top_y),
-		Vector2(offset * 0.5, bit_bottom_y)
+	# 3. Cockpit Window
+	var window_pts = PackedVector2Array()
+	for i in range(10):
+		var ang = PI + (i * PI / 9.0)
+		window_pts.append(Vector2(cos(ang) * DRILL_WIDTH/3, sin(ang) * DRILL_HEIGHT/4 - 10))
+	draw_colored_polygon(window_pts, Color(0.3, 0.7, 0.9, 0.8))
+	
+	# 4. Drill Bit (Large Rotating Cone)
+	var bit_top_y = 5
+	var bit_bottom_y = DRILL_HEIGHT / 2 + 10
+	var bit_width = DRILL_WIDTH * 0.8
+	
+	var anim_offset = fmod(Time.get_ticks_msec() * 0.01, 1.0)
+	var bit_pts = PackedVector2Array([
+		Vector2(-bit_width/2, bit_top_y),
+		Vector2(bit_width/2, bit_top_y),
+		Vector2(0, bit_bottom_y)
 	])
-	draw_colored_polygon(bit_points, Color(0.8, 0.7, 0.2))
+	draw_colored_polygon(bit_pts, Color(0.7, 0.7, 0.75)) # Base silver
 	
-	# Drill bit lines (teeth)
-	for i in range(3):
-		var y = bit_top_y + (bit_bottom_y - bit_top_y) * (i + 1) / 4.0
-		var w = bit_width / 2 * (1.0 - float(i + 1) / 4.0)
-		draw_line(Vector2(-w + offset * 0.5, y), Vector2(w + offset * 0.5, y), Color(0.6, 0.5, 0.1), 3.0)
+	# Spiral stripes for rotation effect
+	for i in range(4):
+		var y_start = bit_top_y + (bit_bottom_y - bit_top_y) * fmod(float(i)/4.0 + anim_offset, 1.0)
+		var y_end = min(y_start + 8, bit_bottom_y)
+		
+		var w_s = bit_width/2 * (1.0 - (y_start - bit_top_y)/(bit_bottom_y - bit_top_y))
+		var w_e = bit_width/2 * (1.0 - (y_end - bit_top_y)/(bit_bottom_y - bit_top_y))
+		
+		var stripe_pts = PackedVector2Array([
+			Vector2(-w_s, y_start), Vector2(w_s, y_start),
+			Vector2(w_e, y_end), Vector2(-w_e, y_end)
+		])
+		draw_colored_polygon(stripe_pts, Color(0.9, 0.8, 0.2)) # Yellow stripes
 	
-	# Draw heat glow when hot
-	if gs and gs.max_heat > 0:
+	# 5. Heat Glow / Damage
+	if gs:
 		var heat_pct = gs.heat / gs.max_heat
-		if heat_pct > 0.5:
-			var glow_alpha = (heat_pct - 0.5) * 2.0 * 0.4
-			var glow_rect = Rect2(-DRILL_WIDTH / 2 - 4, -DRILL_HEIGHT / 2 - 4, DRILL_WIDTH + 8, DRILL_HEIGHT + 8)
-			draw_rect(glow_rect, Color(1, 0.2, 0, glow_alpha), true)
-	
-	# Draw damage cracks when durability is low
-	if gs and gs.max_durability > 0:
-		var dura_pct = gs.durability / gs.max_durability
-		if dura_pct < 0.5:
-			var crack_alpha = (1.0 - dura_pct * 2) * 0.8
-			draw_line(Vector2(-10, -20), Vector2(5, -5), Color(0.3, 0.3, 0.3, crack_alpha), 2.0)
-			draw_line(Vector2(5, -5), Vector2(-5, 10), Color(0.3, 0.3, 0.3, crack_alpha), 2.0)
-			draw_line(Vector2(8, -15), Vector2(15, 5), Color(0.3, 0.3, 0.3, crack_alpha), 2.0)
-
-	# Draw particles
-	for p in spark_particles:
-		var alpha = p["life"] / p["max_life"]
-		var color = p["color"]
-		color.a = alpha
-		var world_x = p["x"] - position.x
-		var world_y = p["y"] - position.y
-		draw_circle(Vector2(world_x, world_y), p["size"], color)
+		if heat_pct > 0.6:
+			draw_circle(Vector2(0,0), DRILL_WIDTH * heat_pct, Color(1, 0.2, 0, (heat_pct-0.6)*0.5))
 
 func _on_game_over(reason: String):
 	set_process(false)

@@ -24,7 +24,7 @@ var cooling_bonus: float = 0.0
 var wear_reduction: float = 0.0
 var coin_multiplier: float = 1.0
 
-var base_cooling_rate: float = 2.0
+var base_cooling_rate: float = 0.5
 var last_upgrade_depth: float = 0.0
 var next_upgrade_depth: float = 100.0
 
@@ -63,7 +63,7 @@ func reset():
 	cooling_bonus = 0.0
 	wear_reduction = 0.0
 	coin_multiplier = 1.0
-	base_cooling_rate = 2.0
+	base_cooling_rate = 0.5
 	last_upgrade_depth = 0.0
 	next_upgrade_depth = 100.0
 	game_active = true
@@ -99,8 +99,14 @@ func add_heat(value: float):
 	if not game_active:
 		return
 	var depth_mult = 1.0 + depth / 500.0
-	var reduced_value = value * depth_mult * (1.0 - heat_resistance)
-	heat = clamp(heat + reduced_value, 0, max_heat)
+	
+	var final_value = 0.0
+	if value > 0:
+		final_value = value * depth_mult * (1.0 - heat_resistance)
+	else:
+		final_value = value # Cooling from minerals is fixed
+		
+	heat = clamp(heat + final_value, 0, max_heat)
 	heat_changed.emit(heat, max_heat)
 	if heat >= max_heat:
 		game_active = false

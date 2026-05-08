@@ -31,6 +31,14 @@ McpInteractionServer="*res://mcp_interaction_server.gd"
 
 
 
+
+
+
+
+
+
+
+
 GameState="*res://scripts/gamestate.gd"
 SaveManager="*res://scripts/save_manager.gd"
 AdManager="*res://scripts/ad_manager.gd"
