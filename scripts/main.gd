@@ -35,6 +35,7 @@ func _ready():
 
 	var hud_scene = preload("res://ui/hud.tscn")
 	hud = hud_scene.instantiate()
+	hud.name = "HUD"
 	add_child(hud)
 	
 	var tutorial_scene = preload("res://scenes/tutorial_overlay.tscn")

@@ -14,18 +14,17 @@ config/name="Deep Drill"
 config/version="0.2.1"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6")
-config/icon="res://deep_drill_app_icon.png"
+boot_splash/show_image=false
 
 [autoload]
 
-McpInteractionServer="*res://mcp_interaction_server.gd"
 
 
 
 
 
 
-
+AudioManager="*res://scripts/audio_manager.gd"
 GameState="*res://scripts/gamestate.gd"
 SaveManager="*res://scripts/save_manager.gd"
 AdManager="*res://scripts/ad_manager.gd"
@@ -35,17 +34,26 @@ Effects="*res://scripts/effects.gd"
 
 window/size/viewport_width=1080
 window/size/viewport_height=1920
-window/size/mode=3
+window/size/window_width_override=540
+window/size/window_height_override=960
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
 window/handheld/orientation=1
 
-[input_devices]
+[input]
 
-pointing/emulate_touch_from_mouse=true
+ui_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194319,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+ui_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194321,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
 
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
-textures/vram_compression/import_etc2_astc=true
-environment/defaults/default_clear_color=Color(0.102, 0.102, 0.18, 1)
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.0627451, 0.0627451, 0.0901961, 1)

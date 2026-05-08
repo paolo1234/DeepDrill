@@ -27,10 +27,11 @@ var heat_resistance: float = 0.0
 var cooling_bonus: float = 0.0
 var wear_reduction: float = 0.0
 var coin_multiplier: float = 1.0
+var drill_damage: float = 0.25 # BASE DAMAGE
 
 var base_cooling_rate: float = 0.5
 var last_upgrade_depth: float = 0.0
-var next_upgrade_depth: float = 100.0
+var next_upgrade_depth: float = 300.0 # STARTING HIGHER (300m)
 
 var game_active: bool = true
 var run_upgrades: Dictionary = {}
@@ -48,12 +49,12 @@ const FRENZY_DURATION = 6.0
 const UPGRADES = {
 	"heat_shield": {"name": "Heat Shield", "icon": "🛡", "max_level": 5, "base_cost": 50, "scaling": 1.8, "effect": "heat_resistance", "desc": "-10% heat per block"},
 	"cooling_fan": {"name": "Cooling Fan", "icon": "❄", "max_level": 5, "base_cost": 40, "scaling": 1.6, "effect": "cooling_bonus", "desc": "+15% cooling rate"},
+	"tungsten_bit": {"name": "Tungsten Bit", "icon": "🔪", "max_level": 5, "base_cost": 70, "scaling": 2.1, "effect": "drill_power", "desc": "+25% block damage"},
+	"atomic_core": {"name": "Atomic Core", "icon": "🔋", "max_level": 5, "base_cost": 90, "scaling": 2.2, "effect": "max_dura", "desc": "+20 max durability"},
 	"reinforced_bit": {"name": "Reinforced Bit", "icon": "🔧", "max_level": 5, "base_cost": 60, "scaling": 2.0, "effect": "wear_reduction", "desc": "-12% wear per block"},
 	"speed_boost": {"name": "Speed Boost", "icon": "⚡", "max_level": 3, "base_cost": 30, "scaling": 1.5, "effect": "speed", "desc": "+10% drill speed"},
 	"coin_magnet": {"name": "Coin Magnet", "icon": "🧲", "max_level": 3, "base_cost": 45, "scaling": 1.7, "effect": "coin_boost", "desc": "+20% coin value"},
-	"deep_scanner": {"name": "Deep Scanner", "icon": "📡", "max_level": 3, "base_cost": 80, "scaling": 2.0, "effect": "vision", "desc": "See 5 rows ahead"},
 	"emergency_repair": {"name": "Emergency Repair", "icon": "🔩", "max_level": 2, "base_cost": 100, "scaling": 2.5, "effect": "repair", "desc": "Restore 30 durability"},
-	"heat_vent": {"name": "Heat Vent", "icon": "🌬", "max_level": 2, "base_cost": 80, "scaling": 2.0, "effect": "instant_cool", "desc": "Remove 40 heat"},
 }
 
 # --- Permanent upgrade definitions ---
@@ -76,12 +77,12 @@ func reset():
 	cooling_bonus = 0.0
 	wear_reduction = 0.0
 	coin_multiplier = 1.0
+	drill_damage = 0.25
 	base_cooling_rate = 0.5
 	last_upgrade_depth = 0.0
-	next_upgrade_depth = 100.0
+	next_upgrade_depth = 300.0 # STARTING AT 300m
 	game_active = true
 	run_upgrades.clear()
-	# Apply permanent upgrades
 	_apply_permanent_upgrades()
 	
 	heat_changed.emit(heat, max_heat)
@@ -90,8 +91,7 @@ func reset():
 
 func _apply_permanent_upgrades():
 	var sm = get_node_or_null("/root/SaveManager")
-	if not sm:
-		return
+	if not sm: return
 	var perms = sm.save_data.get("permanent_upgrades", {})
 	var perm_heat = perms.get("perm_heat_shield", 0)
 	if perm_heat > 0:
@@ -109,16 +109,9 @@ func _apply_permanent_upgrades():
 		coin_multiplier = 1.0 + perm_coin * 0.1
 
 func add_heat(value: float):
-	if not game_active:
-		return
+	if not game_active: return
 	var depth_mult = 1.0 + depth / 1000.0
-	
-	var final_value = 0.0
-	if value > 0:
-		final_value = value * depth_mult * (1.0 - heat_resistance)
-	else:
-		final_value = value # Cooling from minerals is fixed
-		
+	var final_value = value * depth_mult * (1.0 - heat_resistance) if value > 0 else value
 	heat = clamp(heat + final_value, 0, max_heat)
 	heat_changed.emit(heat, max_heat)
 	if heat >= max_heat:
@@ -126,8 +119,7 @@ func add_heat(value: float):
 		game_over.emit("overheated")
 
 func add_wear(value: float):
-	if not game_active:
-		return
+	if not game_active: return
 	var depth_mult = 1.0 + depth / 800.0
 	var reduced_value = value * depth_mult * (1.0 - wear_reduction)
 	durability = clamp(durability - reduced_value, 0, max_durability)
@@ -141,79 +133,38 @@ func add_coins(value: int):
 	coins_changed.emit(coins)
 
 func passive_cooling(delta: float):
-	if not game_active:
-		return
-	
-	# Ambient heat increases with depth: 0 at depth 0, 1.0 at depth 500
+	if not game_active: return
 	var ambient_heat = depth / 500.0
 	var cooling = (base_cooling_rate * (1.0 + cooling_bonus)) - ambient_heat
-	
 	heat = clamp(heat - cooling * delta, 0, max_heat)
 	heat_changed.emit(heat, max_heat)
 
 func check_upgrade_shop():
 	if depth >= next_upgrade_depth and game_active:
-		next_upgrade_depth += 100
+		# Dynamic Interval: 300, 700, 1200, 1800... (Increases by 100m each time)
+		var interval = 300 + (next_upgrade_depth / 300.0) * 100
+		next_upgrade_depth += interval
 		game_active = false
 		upgrade_shop_requested.emit()
-
-func apply_heat_resistance(level: int):
-	heat_resistance = level * 0.1
-
-func apply_cooling_bonus(level: int):
-	cooling_bonus = level * 0.15
-
-func apply_wear_reduction(level: int):
-	wear_reduction = level * 0.12
-
-func apply_coin_boost(level: int):
-	coin_multiplier = 1.0 + level * 0.2
-
-func get_upgrade_cost(upgrade_id: String) -> int:
-	if not UPGRADES.has(upgrade_id):
-		return 0
-	var level = run_upgrades.get(upgrade_id, 0)
-	var data = UPGRADES[upgrade_id]
-	return int(data["base_cost"] * pow(data["scaling"], level))
-
-func can_upgrade(upgrade_id: String) -> bool:
-	if not UPGRADES.has(upgrade_id):
-		return false
-	var level = run_upgrades.get(upgrade_id, 0)
-	return level < UPGRADES[upgrade_id]["max_level"]
-
-func purchase_upgrade(upgrade_id: String) -> bool:
-	if not can_upgrade(upgrade_id):
-		return false
-	var cost = get_upgrade_cost(upgrade_id)
-	if coins >= cost:
-		coins -= cost
-		coins_changed.emit(coins)
-		var new_level = run_upgrades.get(upgrade_id, 0) + 1
-		run_upgrades[upgrade_id] = new_level
-		apply_upgrade_effect(upgrade_id, new_level)
-		return true
-	return false
-
-func apply_free_upgrade(upgrade_id: String) -> bool:
-	if not can_upgrade(upgrade_id):
-		return false
-	var new_level = run_upgrades.get(upgrade_id, 0) + 1
-	run_upgrades[upgrade_id] = new_level
-	apply_upgrade_effect(upgrade_id, new_level)
-	return true
 
 func apply_upgrade_effect(upgrade_id: String, level: int):
 	var effect = UPGRADES[upgrade_id]["effect"]
 	match effect:
 		"heat_resistance":
-			apply_heat_resistance(level)
+			heat_resistance = level * 0.1
 		"cooling_bonus":
-			apply_cooling_bonus(level)
+			cooling_bonus = level * 0.15
 		"wear_reduction":
-			apply_wear_reduction(level)
+			wear_reduction = level * 0.12
 		"coin_boost":
-			apply_coin_boost(level)
+			coin_multiplier = 1.0 + level * 0.2
+		"drill_power":
+			drill_damage = 0.25 * (1.0 + level * 0.25)
+		"max_dura":
+			var old_max = max_durability
+			max_durability = 100.0 + level * 20.0
+			durability += (max_durability - old_max)
+			durability_changed.emit(durability, max_durability)
 		"repair":
 			durability = min(durability + 30, max_durability)
 			durability_changed.emit(durability, max_durability)
@@ -221,25 +172,53 @@ func apply_upgrade_effect(upgrade_id: String, level: int):
 			heat = max(0, heat - 40)
 			heat_changed.emit(heat, max_heat)
 
+func get_upgrade_cost(upgrade_id: String) -> int:
+	if not UPGRADES.has(upgrade_id): return 0
+	var level = run_upgrades.get(upgrade_id, 0)
+	var data = UPGRADES[upgrade_id]
+	return int(data["base_cost"] * pow(data["scaling"], level))
+
+func can_upgrade(upgrade_id: String) -> bool:
+	if not UPGRADES.has(upgrade_id): return false
+	var level = run_upgrades.get(upgrade_id, 0)
+	return level < UPGRADES[upgrade_id]["max_level"]
+
+func purchase_upgrade(upgrade_id: String) -> bool:
+	if not can_upgrade(upgrade_id): return false
+	var cost = get_upgrade_cost(upgrade_id)
+	if coins >= cost:
+		coins -= cost
+		coins_changed.emit(coins)
+		var new_level = run_upgrades.get(upgrade_id, 0) + 1
+		run_upgrades[upgrade_id] = new_level
+		apply_upgrade_effect(upgrade_id, new_level)
+		if has_node("/root/AudioManager"):
+			get_node("/root/AudioManager").play_upgrade_sound()
+		return true
+	return false
+
+func apply_free_upgrade(upgrade_id: String) -> bool:
+	if not can_upgrade(upgrade_id): return false
+	var new_level = run_upgrades.get(upgrade_id, 0) + 1
+	run_upgrades[upgrade_id] = new_level
+	apply_upgrade_effect(upgrade_id, new_level)
+	if has_node("/root/AudioManager"):
+		get_node("/root/AudioManager").play_upgrade_sound()
+	return true
+
 func get_random_upgrades(count: int = 3) -> Array:
 	var available = []
 	for key in UPGRADES.keys():
-		if can_upgrade(key):
-			available.append(key)
+		if can_upgrade(key): available.append(key)
 	available.shuffle()
 	return available.slice(0, min(count, available.size()))
 
 func _process(delta):
 	if not game_active: return
-	
-	# Combo Logic
 	if combo_timer > 0:
 		combo_timer -= delta
 		if combo_timer <= 0:
 			combo_counter = 0
-			coins_changed.emit(coins) # Just to refresh UI if needed
-
-	# Frenzy Logic
 	if frenzy_mode:
 		frenzy_timer -= delta
 		if frenzy_timer <= 0:
@@ -257,13 +236,8 @@ func increment_combo():
 	combo_updated.emit(combo_counter)
 
 func continue_run():
-	# Revive from game over
 	heat = max_heat * 0.5
 	durability = min(durability + 30, max_durability)
 	game_active = true
 	heat_changed.emit(heat, max_heat)
 	durability_changed.emit(durability, max_durability)
-
-func instant_cool_ad():
-	heat = 0
-	heat_changed.emit(heat, max_heat)
