@@ -34,12 +34,13 @@ func _ensure_bus_exists(bus_name: String):
 		AudioServer.set_bus_name(idx, bus_name)
 
 func _start_bgm():
-	if FileAccess.file_exists(music_path):
+	if ResourceLoader.exists(music_path):
 		var stream = load(music_path)
-		music_player.stream = stream
-		music_player.play()
+		if stream:
+			music_player.stream = stream
+			music_player.play()
 	else:
-		push_warning("Musica non trovata in: " + music_path)
+		push_warning("Musica non caricata o non trovata in: " + music_path)
 
 # --- EFFETTI SONORI ASMR (SINTETIZZATI) ---
 

@@ -135,9 +135,10 @@ func get_block_at_row_col(row: int, col: int):
 	return null
 
 func _draw():
-	var top_screen_y = camera_y - 1000
+	# Expand rendering bounds massively to account for camera lag during fast falls
+	var top_screen_y = camera_y - 3000
 	var start_row = max(0, int(top_screen_y / ROW_HEIGHT))
-	var end_row = min(grid.size(), int((camera_y + 1200) / ROW_HEIGHT))
+	var end_row = min(grid.size(), int((camera_y + 3000) / ROW_HEIGHT))
 
 	for row_idx in range(start_row, end_row):
 		var y = row_idx * ROW_HEIGHT

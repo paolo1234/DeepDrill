@@ -2,12 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://diwdevuulpo3f"
-valid=false
+uid="uid://c42gqwbd10edv"
+path="res://.godot/imported/deep_drill_app_icon.png-f22038d959cd0c0ba0e620c02e4d2901.ctex"
+metadata={
+"vram_texture": false
+}
 
 [deps]
 
 source_file="res://deep_drill_app_icon.png"
+dest_files=["res://.godot/imported/deep_drill_app_icon.png-f22038d959cd0c0ba0e620c02e4d2901.ctex"]
 
 [params]
 

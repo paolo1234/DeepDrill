@@ -59,9 +59,9 @@ func _create_background():
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg_layer.add_child(bg)
 	
-	# Much deeper darkness for high contrast
+	# Much deeper darkness for high contrast, but safe for mobile screens
 	var canvas_modulate = CanvasModulate.new()
-	canvas_modulate.color = Color(0.06, 0.06, 0.09, 1) 
+	canvas_modulate.color = Color(0.25, 0.25, 0.35, 1) 
 	add_child(canvas_modulate)
 	
 	_create_vignette()

@@ -37,46 +37,46 @@ func _ready():
 
 func _setup_hud():
 	# 1. DEPTH PILL (TOP CENTER) - Slightly lower for notches
-	var depth_pill = _create_pill_container(Vector2(540, 90), Color(0.1, 0.5, 1.0))
+	var depth_pill = _create_pill_container(Vector2(540, 100), Color(0.1, 0.5, 1.0))
 	depth_pill.name = "DepthPill"
 	add_child(depth_pill)
-	var dl_icon = Label.new(); dl_icon.text = "📏"; dl_icon.position = Vector2(15, 8); dl_icon.add_theme_font_size_override("font_size", 30); depth_pill.add_child(dl_icon)
-	var dl = Label.new(); dl.name = "DepthLabel"; dl.text = "0 m"; dl.add_theme_font_size_override("font_size", 34)
-	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; depth_pill.add_child(dl); dl.position = Vector2(60, 8); dl.size = Vector2(110, 44)
+	var dl_icon = Label.new(); dl_icon.text = "📏"; dl_icon.position = Vector2(20, 12); dl_icon.add_theme_font_size_override("font_size", 40); depth_pill.add_child(dl_icon)
+	var dl = Label.new(); dl.name = "DepthLabel"; dl.text = "0 m"; dl.add_theme_font_size_override("font_size", 42)
+	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; depth_pill.add_child(dl); dl.position = Vector2(70, 12); dl.size = Vector2(150, 50)
 
 	# 2. COINS PILL (TOP RIGHT)
-	var coin_pill = _create_pill_container(Vector2(880, 90), Color(1.0, 0.8, 0.2))
+	var coin_pill = _create_pill_container(Vector2(840, 100), Color(1.0, 0.8, 0.2))
 	coin_pill.name = "CoinPill"
 	add_child(coin_pill)
-	var cl_icon = Label.new(); cl_icon.text = "💰"; cl_icon.position = Vector2(15, 8); cl_icon.add_theme_font_size_override("font_size", 30); coin_pill.add_child(cl_icon)
-	var cl = Label.new(); cl.name = "CoinLabel"; cl.text = "0"; cl.add_theme_font_size_override("font_size", 34)
-	cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; coin_pill.add_child(cl); cl.position = Vector2(60, 8); cl.size = Vector2(100, 44)
+	var cl_icon = Label.new(); cl_icon.text = "💰"; cl_icon.position = Vector2(20, 12); cl_icon.add_theme_font_size_override("font_size", 40); coin_pill.add_child(cl_icon)
+	var cl = Label.new(); cl.name = "CoinLabel"; cl.text = "0"; cl.add_theme_font_size_override("font_size", 42)
+	cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; coin_pill.add_child(cl); cl.position = Vector2(70, 12); cl.size = Vector2(150, 50)
 
 	# 3. STATUS BARS (TOP LEFT - Better spacing for notches)
-	_create_status_bar("DuraBar", Vector2(230, 95), Color(0.2, 0.9, 0.4), "⚡")
-	_create_status_bar("HeatBar", Vector2(230, 185), Color(1.0, 0.3, 0.1), "🔥")
+	_create_status_bar("DuraBar", Vector2(250, 100), Color(0.2, 0.9, 0.4), "⚡")
+	_create_status_bar("HeatBar", Vector2(250, 200), Color(1.0, 0.3, 0.1), "🔥")
 
 	# 4. PAUSE BUTTON (TOP RIGHT - Safe Margin)
-	_create_premium_pause_btn(Vector2(950, 230))
+	_create_premium_pause_btn(Vector2(930, 240))
 
 func _create_pill_container(pos: Vector2, color: Color) -> Panel:
 	var p = Panel.new()
 	var s = StyleBoxFlat.new()
 	s.bg_color = Color(0.05, 0.05, 0.1, 0.85)
-	s.set_corner_radius_all(30)
-	s.border_width_left = 3; s.border_width_top = 3; s.border_width_right = 3; s.border_width_bottom = 3
+	s.set_corner_radius_all(40)
+	s.border_width_left = 4; s.border_width_top = 4; s.border_width_right = 4; s.border_width_bottom = 4
 	s.border_color = color
 	p.add_theme_stylebox_override("panel", s)
-	p.custom_minimum_size = Vector2(200, 65)
-	p.position = pos - Vector2(100, 32)
+	p.custom_minimum_size = Vector2(240, 80)
+	p.position = pos - Vector2(120, 40)
 	return p
 
 func _create_status_bar(bar_name: String, pos: Vector2, color: Color, icon: String):
-	var container = Control.new(); container.name = bar_name; container.position = pos - Vector2(100, 40); add_child(container)
-	var bg = Panel.new(); var bs = StyleBoxFlat.new(); bs.bg_color = Color(0.02, 0.02, 0.05, 0.9); bs.set_corner_radius_all(30); bs.border_width_left = 3; bs.border_width_top = 3; bs.border_width_right = 3; bs.border_width_bottom = 3; bs.border_color = color.lerp(Color.BLACK, 0.5); bg.add_theme_stylebox_override("panel", bs); bg.size = Vector2(240, 55); container.add_child(bg)
-	var bar = ProgressBar.new(); bar.name = "Bar"; bar.show_percentage = true; bar.size = Vector2(230, 45); bar.position = Vector2(5, 5); var fs = StyleBoxFlat.new(); fs.bg_color = color; fs.set_corner_radius_all(25); var bks = StyleBoxFlat.new(); bks.bg_color = Color(0, 0, 0, 0); bar.add_theme_stylebox_override("fill", fs); bar.add_theme_stylebox_override("background", bks); bar.add_theme_font_size_override("font_size", 20); container.add_child(bar)
-	var circle = Panel.new(); var cs = StyleBoxFlat.new(); cs.bg_color = Color(0.05, 0.05, 0.1, 1.0); cs.border_width_left = 3; cs.border_width_top = 3; cs.border_width_right = 3; cs.border_width_bottom = 3; cs.border_color = color; cs.set_corner_radius_all(35); circle.add_theme_stylebox_override("panel", cs); circle.size = Vector2(65, 65); circle.position = Vector2(-32, -5); container.add_child(circle)
-	var il = Label.new(); il.text = icon; il.add_theme_font_size_override("font_size", 30); il.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; il.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; il.size = Vector2(65, 65); circle.add_child(il)
+	var container = Control.new(); container.name = bar_name; container.position = pos - Vector2(120, 40); add_child(container)
+	var bg = Panel.new(); var bs = StyleBoxFlat.new(); bs.bg_color = Color(0.02, 0.02, 0.05, 0.9); bs.set_corner_radius_all(35); bs.border_width_left = 4; bs.border_width_top = 4; bs.border_width_right = 4; bs.border_width_bottom = 4; bs.border_color = color.lerp(Color.BLACK, 0.5); bg.add_theme_stylebox_override("panel", bs); bg.size = Vector2(280, 70); container.add_child(bg)
+	var bar = ProgressBar.new(); bar.name = "Bar"; bar.show_percentage = true; bar.size = Vector2(270, 58); bar.position = Vector2(5, 6); var fs = StyleBoxFlat.new(); fs.bg_color = color; fs.set_corner_radius_all(30); var bks = StyleBoxFlat.new(); bks.bg_color = Color(0, 0, 0, 0); bar.add_theme_stylebox_override("fill", fs); bar.add_theme_stylebox_override("background", bks); bar.add_theme_font_size_override("font_size", 24); container.add_child(bar)
+	var circle = Panel.new(); var cs = StyleBoxFlat.new(); cs.bg_color = Color(0.05, 0.05, 0.1, 1.0); cs.border_width_left = 4; cs.border_width_top = 4; cs.border_width_right = 4; cs.border_width_bottom = 4; cs.border_color = color; cs.set_corner_radius_all(42); circle.add_theme_stylebox_override("panel", cs); circle.size = Vector2(85, 85); circle.position = Vector2(-42, -7); container.add_child(circle)
+	var il = Label.new(); il.text = icon; il.add_theme_font_size_override("font_size", 42); il.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; il.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; il.size = Vector2(85, 85); circle.add_child(il)
 
 func _create_touch_controls():
 	touch_controls = Control.new(); touch_controls.name = "TouchControls"; add_child(touch_controls)
@@ -100,10 +100,10 @@ func _create_pop_control_btn(txt: String, pos: Vector2, color: Color) -> Button:
 	return btn
 
 func _create_premium_pause_btn(pos: Vector2):
-	var btn = Button.new(); btn.position = pos - Vector2(45, 45); btn.custom_minimum_size = Vector2(90, 90)
-	var s = StyleBoxFlat.new(); s.bg_color = Color(0.1, 0.1, 0.15, 0.9); s.set_corner_radius_all(45); s.border_width_left = 3; s.border_width_top = 3; s.border_width_right = 3; s.border_width_bottom = 3; s.border_color = Color(0.4, 0.7, 1.0)
+	var btn = Button.new(); btn.position = pos - Vector2(55, 55); btn.custom_minimum_size = Vector2(110, 110)
+	var s = StyleBoxFlat.new(); s.bg_color = Color(0.1, 0.1, 0.15, 0.9); s.set_corner_radius_all(55); s.border_width_left = 4; s.border_width_top = 4; s.border_width_right = 4; s.border_width_bottom = 4; s.border_color = Color(0.4, 0.7, 1.0)
 	btn.add_theme_stylebox_override("normal", s); btn.pressed.connect(_toggle_pause); add_child(btn)
-	var ic = Label.new(); ic.text = "⏸"; ic.add_theme_font_size_override("font_size", 45); ic.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; ic.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; ic.size = Vector2(90, 90); btn.add_child(ic)
+	var ic = Label.new(); ic.text = "⏸"; ic.add_theme_font_size_override("font_size", 60); ic.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; ic.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; ic.size = Vector2(110, 110); btn.add_child(ic)
 
 func _toggle_pause():
 	if has_node("/root/AudioManager"): get_node("/root/AudioManager").play_button_click()
