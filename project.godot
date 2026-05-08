@@ -13,6 +13,19 @@ run/main_scene="res://scenes/main_menu.tscn"
 
 [autoload]
 
+McpInteractionServer="*res://mcp_interaction_server.gd"
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -21,6 +34,7 @@ run/main_scene="res://scenes/main_menu.tscn"
 GameState="*res://scripts/gamestate.gd"
 SaveManager="*res://scripts/save_manager.gd"
 AdManager="*res://scripts/ad_manager.gd"
+Effects="*res://scripts/effects.gd"
 
 [display]
 

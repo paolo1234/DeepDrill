@@ -10,6 +10,7 @@ func _ready():
 	var gs = get_node("/root/GameState")
 	if gs:
 		gs.reset()
+		gs.game_active = false
 		gs.game_over.connect(_on_game_over)
 		gs.upgrade_shop_requested.connect(_on_upgrade_shop_requested)
 
@@ -26,12 +27,23 @@ func _ready():
 	camera.position = Vector2(540, 300)
 	camera.zoom = Vector2(1.0, 1.0)
 	add_child(camera)
+	
+	if get_node_or_null("/root/Effects"):
+		get_node("/root/Effects").camera = camera
 
 	_create_background()
 
 	var hud_scene = preload("res://ui/hud.tscn")
 	hud = hud_scene.instantiate()
 	add_child(hud)
+	
+	var tutorial_scene = preload("res://scenes/tutorial_overlay.tscn")
+	var tutorial = tutorial_scene.instantiate()
+	var tutorial_layer = CanvasLayer.new()
+	tutorial_layer.layer = 10
+	tutorial_layer.name = "TutorialLayer"
+	add_child(tutorial_layer)
+	tutorial_layer.add_child(tutorial)
 
 func _create_background():
 	var bg_layer = CanvasLayer.new()
@@ -44,6 +56,11 @@ func _create_background():
 	bg.color = Color(0.102, 0.102, 0.18, 1)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg_layer.add_child(bg)
+	
+	# Darken the foreground (Grid and Drill) for lighting effect
+	var canvas_modulate = CanvasModulate.new()
+	canvas_modulate.color = Color(0.2, 0.2, 0.25, 1)
+	add_child(canvas_modulate)
 
 func _process(delta):
 	if drill and camera:
@@ -89,15 +106,14 @@ func _on_upgrade_shop_requested():
 	if upgrade_shop:
 		return
 	
-	var shop_script = load("res://scripts/upgrade_shop.gd")
+	var shop_scene = preload("res://scenes/upgrade_shop.tscn")
+	upgrade_shop = shop_scene.instantiate()
+	
 	var shop_layer = CanvasLayer.new()
 	shop_layer.layer = 5
 	shop_layer.name = "ShopLayer"
 	add_child(shop_layer)
 
-	upgrade_shop = Control.new()
-	upgrade_shop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	upgrade_shop.set_script(shop_script)
 	shop_layer.add_child(upgrade_shop)
 
 func show_game_over(reason: String):

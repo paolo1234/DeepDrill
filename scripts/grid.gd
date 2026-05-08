@@ -30,9 +30,10 @@ const TIER_COLORS = {
 	5: Color(0.23, 0.06, 0.06),    # Magma core red
 }
 
+var blocks_texture: Texture2D
+
 func _ready():
 	rng.randomize()
-	# Pre-generate rows
 	for i in range(VISIBLE_ROWS + BUFFER_ROWS):
 		generate_row(i)
 
@@ -136,28 +137,21 @@ func get_block_at_row_col(row: int, col: int):
 	return null
 
 func _draw():
-	var start_row = max(0, int(camera_y / ROW_HEIGHT) - 5)
-	var end_row = min(grid.size(), start_row + VISIBLE_ROWS + 10)
+	var top_screen_y = camera_y - 1000
+	var start_row = max(0, int(top_screen_y / ROW_HEIGHT))
+	var end_row = min(grid.size(), int((camera_y + 1200) / ROW_HEIGHT))
 
-	# Draw background tiers
 	for row_idx in range(start_row, end_row):
-		var y = row_idx * ROW_HEIGHT - camera_y + 600  # offset so drill is at ~30% from bottom
-		if y < -100 or y > 2200:
-			continue
+		var y = row_idx * ROW_HEIGHT
 		var depth = row_idx * ROW_HEIGHT * 0.05
 		var tier = get_tier(depth)
 		var bg_color = TIER_COLORS[tier]
-		# Slight variation per row
 		bg_color = bg_color.darkened(fmod(row_idx * 0.02, 0.1))
 		draw_rect(Rect2(0, y, COLS * COL_WIDTH, ROW_HEIGHT), bg_color, true)
 
-	# Draw blocks
 	for row_idx in range(start_row, end_row):
 		var row = grid[row_idx]
-		var y = row_idx * ROW_HEIGHT - camera_y + 600
-
-		if y < -100 or y > 2200:
-			continue
+		var y = row_idx * ROW_HEIGHT
 
 		for col in range(COLS):
 			var block = row[col]
@@ -165,44 +159,43 @@ func _draw():
 				var x = col * COL_WIDTH
 				var padding = 2.0
 				var rect = Rect2(x + padding, y + padding, COL_WIDTH - padding * 2, ROW_HEIGHT - padding * 2)
+				var base_c = block["color"]
 				
-				# Main block fill
-				draw_rect(rect, block["color"], true)
-				
-				# Border (darker)
-				draw_rect(rect, block["color"].darkened(0.3), false, 3.0)
+				# Premium Cartoon Bevel Effect
+				draw_rect(rect, base_c.darkened(0.5), true) # Deep shadow
+				var body_rect = Rect2(rect.position.x, rect.position.y, rect.size.x, rect.size.y - 6)
+				draw_rect(body_rect, base_c, true) # Main color
+				var highlight_rect = Rect2(body_rect.position.x, body_rect.position.y, body_rect.size.x, 4)
+				draw_rect(highlight_rect, base_c.lightened(0.4), true) # Top highlight
 				
 				# Block-specific decorations
 				match block["type"]:
-					1: # Dirt - small dots
+					1: # Dirt
 						for i in range(3):
 							var dx = x + padding + 10 + i * 40
 							var dy = y + padding + 10 + fmod(i * 17, 25)
-							draw_circle(Vector2(dx, dy), 3, block["color"].darkened(0.2))
-					2: # Stone - crack lines
-						draw_line(Vector2(x + 15, y + 10), Vector2(x + COL_WIDTH - 25, y + ROW_HEIGHT - 15), block["color"].lightened(0.15), 1.5)
-						draw_line(Vector2(x + COL_WIDTH - 20, y + 8), Vector2(x + 20, y + ROW_HEIGHT - 10), block["color"].lightened(0.1), 1.0)
-					3: # Granite - diagonal lines
-						for i in range(4):
-							var lx = x + padding + i * 35
-							draw_line(Vector2(lx, y + padding), Vector2(lx + 20, y + ROW_HEIGHT - padding), block["color"].lightened(0.1), 1.5)
-					4: # Gold - sparkle dots
-						for i in range(4):
-							var sx = x + 15 + fmod(i * 37, COL_WIDTH - 30)
-							var sy = y + 10 + fmod(i * 13, ROW_HEIGHT - 20)
-							draw_circle(Vector2(sx, sy), 4, Color(1, 1, 0.7, 0.8))
-					5: # Diamond - star shape
+							draw_rect(Rect2(dx, dy, 6, 6), base_c.darkened(0.3), true)
+					2: # Stone
+						draw_line(Vector2(x + 15, y + 10), Vector2(x + COL_WIDTH - 25, y + ROW_HEIGHT - 15), base_c.darkened(0.3), 3.0)
+					3: # Granite
+						draw_rect(Rect2(x+10, y+10, 10, 10), base_c.darkened(0.4), true)
+						draw_rect(Rect2(x+COL_WIDTH-30, y+20, 15, 15), base_c.darkened(0.4), true)
+					4: # Gold
+						for i in range(3):
+							var sx = x + 20 + i * 35
+							var sy = y + 15 + fmod(i * 13, 10)
+							draw_rect(Rect2(sx, sy, 12, 12), Color(1, 1, 0.4), true)
+							draw_rect(Rect2(sx+2, sy+2, 4, 4), Color(1, 1, 1), true) # Sparkle
+					5: # Diamond
 						var cx = x + COL_WIDTH / 2
-						var cy = y + ROW_HEIGHT / 2
-						var star_size = min(COL_WIDTH, ROW_HEIGHT) * 0.25
-						draw_line(Vector2(cx - star_size, cy), Vector2(cx + star_size, cy), Color(1, 1, 1, 0.7), 2.0)
-						draw_line(Vector2(cx, cy - star_size), Vector2(cx, cy + star_size), Color(1, 1, 1, 0.7), 2.0)
-						draw_line(Vector2(cx - star_size * 0.7, cy - star_size * 0.7), Vector2(cx + star_size * 0.7, cy + star_size * 0.7), Color(0.8, 1, 1, 0.5), 1.5)
-						draw_line(Vector2(cx + star_size * 0.7, cy - star_size * 0.7), Vector2(cx - star_size * 0.7, cy + star_size * 0.7), Color(0.8, 1, 1, 0.5), 1.5)
-					6: # Lava - animated bubbles
+						var cy = y + ROW_HEIGHT / 2 - 3
+						var p = PackedVector2Array([Vector2(cx, cy-15), Vector2(cx+15, cy), Vector2(cx, cy+15), Vector2(cx-15, cy)])
+						draw_colored_polygon(p, Color(0.2, 1, 1))
+						draw_circle(Vector2(cx-4, cy-4), 3, Color(1,1,1))
+					6: # Lava
 						var time = float(row_idx) * 0.3
 						for i in range(3):
 							var bx = x + 20 + fmod(i * 47 + time * 10, COL_WIDTH - 40)
 							var by = y + 12 + fmod(i * 19, ROW_HEIGHT - 24)
-							var bsize = 5 + sin(time + i) * 2
-							draw_circle(Vector2(bx, by), bsize, Color(1, 0.6, 0, 0.6))
+							var bsize = 6 + sin(time + i) * 3
+							draw_circle(Vector2(bx, by), bsize, Color(1, 0.8, 0.2))

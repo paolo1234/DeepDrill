@@ -11,11 +11,12 @@
 - [x] Rebuild HUD scene (ui/hud.tscn)
 
 ## Phase 2: New Features
-- [ ] Create upgrade_shop.gd (UI every 100m)
-- [ ] Create effects.gd (particles, screen shake, speed lines)
+- [x] Create upgrade_shop.gd (UI every 100m)
+- [x] Create effects.gd (particles, screen shake, speed lines, floating text)
+- [x] Improve Gameplay (overlap collision, feedback loops)
 - [x] Update main_menu.gd (permanent shop, better visuals)
 - [x] Rebuild main_menu.tscn scene
-- [ ] Continue from deep_drill_gdd_part1.md and deep_drill_gdd_part2.md files
+- [x] Continue from deep_drill_gdd_part1.md and deep_drill_gdd_part2.md files
 
 ## Phase 3: Verify
 - [ ] Run game, check for errors

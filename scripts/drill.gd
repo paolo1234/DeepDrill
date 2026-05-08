@@ -12,12 +12,13 @@ var target_col: int = 3
 var current_x: float = 0.0
 var grid_ref: Node2D = null
 var gs: Node = null
-var _last_drilled_row: int = -1
+var speed_penalty: float = 0.0
 
 # Visual
 var drill_anim_frame: int = 0
 var drill_anim_timer: float = 0.0
 var spark_particles: Array = []
+var drill_texture: Texture2D
 
 func _ready():
 	gs = get_node("/root/GameState")
@@ -26,6 +27,37 @@ func _ready():
 	target_col = 3
 	current_x = _col_to_x(target_col)
 	position.x = current_x
+	call_deferred("_spawn_start_text")
+	
+	_setup_lighting()
+
+func _setup_lighting():
+	var light = PointLight2D.new()
+	light.color = Color(1.0, 0.85, 0.6)
+	light.energy = 1.2
+	light.texture_scale = 3.5
+	light.blend_mode = Light2D.BLEND_MODE_ADD
+	
+	var gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1, 1, 1, 1))
+	gradient.add_point(0.7, Color(0.2, 0.2, 0.2, 1))
+	gradient.add_point(1.0, Color(0, 0, 0, 1))
+	
+	var tex = GradientTexture2D.new()
+	tex.gradient = gradient
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1, 0.5)
+	tex.width = 256
+	tex.height = 256
+	
+	light.texture = tex
+	add_child(light)
+
+func _spawn_start_text():
+	var effects = get_node_or_null("/root/Effects")
+	if effects:
+		effects.spawn_floating_text(position - Vector2(0, 60), "DRILL!\nSwipe L/R", Color(1, 1, 1))
 
 func _col_to_x(col: int) -> float:
 	return GRID_OFFSET_X + col * COL_WIDTH + COL_WIDTH / 2.0
@@ -38,9 +70,14 @@ func _process(delta):
 	var speed_mult = 1.0 + gs.depth / 1000.0
 	speed = BASE_SPEED * speed_mult
 	
+	if speed_penalty > 0:
+		speed_penalty = max(0.0, speed_penalty - delta * 2.5) # recovers over time
+
+	var final_speed = speed * max(0.2, 1.0 - speed_penalty)
+
 	# Move down
-	position.y += speed * delta
-	gs.set_depth(gs.depth + speed * delta * 0.05)  # ~1m per 20px
+	position.y += final_speed * delta
+	gs.set_depth(gs.depth + final_speed * delta * 0.05)  # ~1m per 20px
 	gs.passive_cooling(delta)
 
 	# Handle smooth horizontal movement
@@ -88,28 +125,55 @@ func _unhandled_input(event):
 func _try_drill_block():
 	if not grid_ref or not gs.game_active:
 		return
-	# Get the row at drill's bottom
-	var drill_bottom_y = position.y + DRILL_HEIGHT / 2.0
-	var row_idx = grid_ref.get_row_at_y(drill_bottom_y)
 	
-	if row_idx == _last_drilled_row:
-		return  # Already drilled this row
-	_last_drilled_row = row_idx
-
-	# Drill current column and adjacent
-	var block = grid_ref.get_block_at_row_col(row_idx, target_col)
-	if block and not block.get("is_dug", false):
-		_drill_block(block, row_idx, target_col)
+	var drill_rect = Rect2(position.x - DRILL_WIDTH/2.0, position.y - DRILL_HEIGHT/2.0, DRILL_WIDTH, DRILL_HEIGHT)
+	
+	var top_row = grid_ref.get_row_at_y(drill_rect.position.y)
+	var bottom_row = grid_ref.get_row_at_y(drill_rect.position.y + drill_rect.size.y)
+	
+	var left_col = max(0, int((drill_rect.position.x - DRILL_WIDTH/2.0 - GRID_OFFSET_X) / COL_WIDTH))
+	var right_col = min(COLS - 1, int((drill_rect.position.x + DRILL_WIDTH/2.0 - GRID_OFFSET_X) / COL_WIDTH))
+	
+	for r in range(top_row, bottom_row + 1):
+		for c in range(left_col, right_col + 1):
+			var block = grid_ref.get_block_at_row_col(r, c)
+			if block and not block.get("is_dug", false):
+				_drill_block(block, r, c)
 
 func _drill_block(block: Dictionary, row: int, col: int):
 	if block == null or block.get("is_dug", false):
 		return
 	block["is_dug"] = true
 	
+	var block_type = block.get("type", 1)
+	var heat = block.get("heat", 0)
+	var wear = block.get("wear", 0)
+	var coins = block.get("coins", 0)
+	
 	# Apply effects
-	gs.add_heat(block.get("heat", 0))
-	gs.add_wear(block.get("wear", 0))
-	gs.add_coins(block.get("coins", 0))
+	gs.add_heat(heat)
+	gs.add_wear(wear)
+	gs.add_coins(coins)
+	
+	# Visual Feedback (Floating text and shake)
+	var effects = get_node_or_null("/root/Effects")
+	if effects:
+		var block_center = Vector2(GRID_OFFSET_X + col * COL_WIDTH + COL_WIDTH/2.0, row * grid_ref.ROW_HEIGHT + grid_ref.ROW_HEIGHT/2.0)
+		var spawn_pos = position + Vector2(randf_range(-20, 20), -30)
+		
+		if coins > 0:
+			effects.spawn_floating_text(spawn_pos, "+%d 🟡" % coins, Color(1, 0.9, 0.2))
+			spawn_pos.y -= 25
+		if heat > 2:
+			effects.spawn_floating_text(spawn_pos, "+%d 🔥" % heat, Color(1, 0.3, 0.1))
+			spawn_pos.y -= 25
+		if wear > 1:
+			effects.spawn_floating_text(spawn_pos, "-%d 🔧" % wear, Color(0.7, 0.7, 0.8))
+			
+		# Screen shake and speed penalty for hard blocks
+		if block_type in [2, 3, 5]: # Stone, Granite, Diamond
+			effects.shake(block_type * 1.5)
+			speed_penalty = min(0.8, speed_penalty + 0.3)
 	
 	# Spawn break particles
 	if grid_ref:
@@ -119,18 +183,28 @@ func _drill_block(block: Dictionary, row: int, col: int):
 	grid_ref.queue_redraw()
 
 func _spawn_break_particles(col: int, row: int, color: Color):
-	for i in range(6):
-		var particle = {
-			"x": position.x + randf_range(-20, 20),
-			"y": position.y + DRILL_HEIGHT / 2.0 + randf_range(-10, 10),
-			"vx": randf_range(-120, 120),
-			"vy": randf_range(-200, -50),
-			"life": 0.5,
-			"max_life": 0.5,
-			"color": color,
-			"size": randf_range(3, 8)
-		}
-		spark_particles.append(particle)
+	var p = CPUParticles2D.new()
+	p.emitting = false
+	p.one_shot = true
+	p.explosiveness = 0.95
+	p.amount = 20
+	p.lifetime = 0.35
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 16.0
+	p.spread = 180.0
+	p.gravity = Vector2(0, 500)
+	p.initial_velocity_min = 150
+	p.initial_velocity_max = 300
+	p.scale_amount_min = 4.0
+	p.scale_amount_max = 8.0
+	p.color = color
+	
+	get_tree().current_scene.add_child(p)
+	p.global_position = position + Vector2(0, DRILL_HEIGHT/2.5)
+	p.emitting = true
+	
+	var timer = get_tree().create_timer(1.0)
+	timer.timeout.connect(p.queue_free)
 
 func _update_particles(delta):
 	var to_remove = []
@@ -162,13 +236,15 @@ func _update_particles(delta):
 		spark_particles.append(spark)
 
 func _draw():
-	# Draw drill body
+	# Draw drill body with bevel
 	var body_rect = Rect2(-DRILL_WIDTH / 2, -DRILL_HEIGHT / 2, DRILL_WIDTH, DRILL_HEIGHT * 0.6)
-	var body_color = Color(0.6, 0.6, 0.7)
-	draw_rect(body_rect, body_color, true)
+	var body_color = Color(0.5, 0.5, 0.6)
+	draw_rect(body_rect, body_color.darkened(0.5), true) # Shadow
+	var body_inner = Rect2(body_rect.position.x, body_rect.position.y, body_rect.size.x, body_rect.size.y - 4)
+	draw_rect(body_inner, body_color, true)
 	
 	# Metallic highlight
-	var highlight = Rect2(-DRILL_WIDTH / 2 + 4, -DRILL_HEIGHT / 2 + 4, 8, DRILL_HEIGHT * 0.5)
+	var highlight = Rect2(-DRILL_WIDTH / 2 + 4, -DRILL_HEIGHT / 2 + 4, 8, DRILL_HEIGHT * 0.5 - 4)
 	draw_rect(highlight, Color(0.8, 0.8, 0.9, 0.5), true)
 	
 	# Draw drill bit (triangle, rotates)
@@ -189,7 +265,7 @@ func _draw():
 	for i in range(3):
 		var y = bit_top_y + (bit_bottom_y - bit_top_y) * (i + 1) / 4.0
 		var w = bit_width / 2 * (1.0 - float(i + 1) / 4.0)
-		draw_line(Vector2(-w + offset * 0.5, y), Vector2(w + offset * 0.5, y), Color(0.6, 0.5, 0.1), 2.0)
+		draw_line(Vector2(-w + offset * 0.5, y), Vector2(w + offset * 0.5, y), Color(0.6, 0.5, 0.1), 3.0)
 	
 	# Draw heat glow when hot
 	if gs and gs.max_heat > 0:

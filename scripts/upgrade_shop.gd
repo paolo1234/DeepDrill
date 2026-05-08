@@ -4,63 +4,40 @@ var available_upgrades: Array = []
 var free_upgrade: String = ""
 var purchasable_upgrades: Array = []
 
+@onready var depth_label = $MarginContainer/VBoxContainer/DepthLabel
+@onready var cards_container = $MarginContainer/VBoxContainer/CardsContainer
+@onready var continue_btn = $MarginContainer/VBoxContainer/ContinueBtn
+
 func _ready():
 	_pause_game()
-	_setup_ui()
+	
+	continue_btn.pressed.connect(_on_continue_pressed)
+	
+	var gs = get_node_or_null("/root/GameState")
+	if gs:
+		depth_label.text = "Depth: %d m" % int(gs.depth)
+	else:
+		depth_label.text = "Depth: 0 m"
+		
+	_get_upgrade_offers()
+	
+	var free_card = _create_upgrade_card(free_upgrade, true)
+	cards_container.add_child(free_card)
+
+	for upgrade_id in purchasable_upgrades:
+		var card = _create_upgrade_card(upgrade_id, false)
+		cards_container.add_child(card)
 
 func _pause_game():
 	var gs = get_node_or_null("/root/GameState")
 	if gs:
 		gs.game_active = false
 
-func _setup_ui():
-	var bg = ColorRect.new()
-	bg.color = Color(0, 0, 0, 0.9)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-
-	var panel = VBoxContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-250, -350)
-	panel.size = Vector2(500, 700)
-	panel.add_theme_constant_override("separation", 20)
-	add_child(panel)
-
-	var title = Label.new()
-	title.text = "UPGRADE STATION"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 40)
-	panel.add_child(title)
-
-	var gs = get_node_or_null("/root/GameState")
-	var depth_label = Label.new()
-	depth_label.text = "Depth: %d m" % int(gs.depth if gs else 0)
-	depth_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	panel.add_child(depth_label)
-
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 20)
-	panel.add_child(spacer)
-
-	_get_upgrade_offers()
-
-	var free_card = _create_upgrade_card(free_upgrade, true)
-	panel.add_child(free_card)
-
-	for upgrade_id in purchasable_upgrades:
-		var card = _create_upgrade_card(upgrade_id, false)
-		panel.add_child(card)
-
-	var continue_btn = Button.new()
-	continue_btn.text = "CONTINUE DRILLING"
-	continue_btn.custom_minimum_size = Vector2(200, 60)
-	continue_btn.add_theme_font_size_override("font_size", 24)
-	continue_btn.pressed.connect(_on_continue_pressed)
-	panel.add_child(continue_btn)
-
 func _get_upgrade_offers():
 	var gs = get_node_or_null("/root/GameState")
 	if not gs:
+		free_upgrade = "heat_shield"
+		purchasable_upgrades = ["cooling_fan", "speed_boost"]
 		return
 
 	available_upgrades = gs.get_random_upgrades(3)
@@ -69,39 +46,53 @@ func _get_upgrade_offers():
 		purchasable_upgrades = available_upgrades.slice(1, available_upgrades.size())
 	else:
 		free_upgrade = "heat_shield"
-		purchasable_upgrades = ["cooling_fan"]
+		purchasable_upgrades = ["cooling_fan", "speed_boost"]
 
-func _create_upgrade_card(upgrade_id: String, is_free: bool) -> VBoxContainer:
-	var card = VBoxContainer.new()
-	card.add_theme_constant_override("separation", 5)
-
-	var bg = ColorRect.new()
-	bg.custom_minimum_size = Vector2(450, 120)
-	bg.color = Color(0.15, 0.15, 0.25, 1)
-	card.add_child(bg)
+func _create_upgrade_card(upgrade_id: String, is_free: bool) -> PanelContainer:
+	var card = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.15, 0.25, 1)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_right = 12
+	style.corner_radius_bottom_left = 12
+	card.add_theme_stylebox_override("panel", style)
+	card.custom_minimum_size = Vector2(0, 140)
+	
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 15)
+	margin.add_theme_constant_override("margin_top", 15)
+	margin.add_theme_constant_override("margin_right", 15)
+	margin.add_theme_constant_override("margin_bottom", 15)
+	card.add_child(margin)
+	
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 5)
+	margin.add_child(vbox)
 
 	var name_label = Label.new()
 	name_label.text = _get_upgrade_name(upgrade_id)
 	name_label.add_theme_font_size_override("font_size", 22)
-	name_label.position = Vector2(10, 10)
-	bg.add_child(name_label)
+	vbox.add_child(name_label)
 
 	var desc_label = Label.new()
 	desc_label.text = _get_upgrade_desc(upgrade_id)
 	desc_label.add_theme_font_size_override("font_size", 16)
 	desc_label.modulate = Color(0.8, 0.8, 0.8)
-	desc_label.position = Vector2(10, 40)
-	bg.add_child(desc_label)
+	vbox.add_child(desc_label)
 
 	var btn = Button.new()
-	btn.position = Vector2(10, 75)
-	btn.custom_minimum_size = Vector2(200, 35)
+	btn.custom_minimum_size = Vector2(0, 45)
+	var btn_style = StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.1, 0.6, 0.2, 1) if is_free else Color(0.8, 0.6, 0.1, 1)
+	btn_style.corner_radius_top_left = 8
+	btn_style.corner_radius_top_right = 8
+	btn_style.corner_radius_bottom_right = 8
+	btn_style.corner_radius_bottom_left = 8
+	btn.add_theme_stylebox_override("normal", btn_style)
+	btn.add_theme_font_size_override("font_size", 18)
 
 	var gs = get_node_or_null("/root/GameState")
-	var level = 0
-	if gs:
-		level = gs.run_upgrades.get(upgrade_id, 0)
-
 	if is_free:
 		btn.text = "FREE - TAKE ONE"
 		btn.pressed.connect(func(): _select_free_upgrade(upgrade_id))
@@ -113,7 +104,7 @@ func _create_upgrade_card(upgrade_id: String, is_free: bool) -> VBoxContainer:
 		btn.disabled = not gs or gs.coins < cost
 		btn.pressed.connect(func(): _purchase_upgrade(upgrade_id))
 
-	bg.add_child(btn)
+	vbox.add_child(btn)
 
 	return card
 
