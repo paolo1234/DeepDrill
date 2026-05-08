@@ -1,6 +1,10 @@
 ; Engine configuration file.
 ; It's best edited using the editor UI and not directly,
-; but it can also be manually edited with care.
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -8,44 +12,10 @@ config_version=5
 
 config/name="Deep Drill"
 config/version="0.2"
-config/features=PackedStringArray("4.6")
 run/main_scene="res://scenes/main_menu.tscn"
+config/features=PackedStringArray("4.6")
 
 [autoload]
-
-McpInteractionServer="*res://mcp_interaction_server.gd"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 GameState="*res://scripts/gamestate.gd"
@@ -57,14 +27,17 @@ Effects="*res://scripts/effects.gd"
 
 window/size/viewport_width=1080
 window/size/viewport_height=1920
+window/size/mode=3
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep_width"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
 
-[input]
+[input_devices]
 
-; Using built-in ui_left and ui_right instead of custom inputs to avoid parsing errors
+pointing/emulate_touch_from_mouse=true
 
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.102, 0.102, 0.18, 1)

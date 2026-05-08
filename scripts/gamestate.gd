@@ -6,6 +6,9 @@ signal coins_changed(value)
 signal game_over(reason)
 signal upgrade_shop_requested
 signal depth_changed(value)
+signal combo_updated(count)
+signal frenzy_started
+signal frenzy_ended
 
 # --- Run state ---
 var depth: float = 0.0
@@ -18,6 +21,7 @@ var coins: int = 0
 func set_depth(val: float):
 	depth = val
 	depth_changed.emit(depth)
+	check_upgrade_shop()
 
 var heat_resistance: float = 0.0
 var cooling_bonus: float = 0.0
@@ -30,6 +34,15 @@ var next_upgrade_depth: float = 100.0
 
 var game_active: bool = true
 var run_upgrades: Dictionary = {}
+
+# Engagement Systems
+var combo_counter: int = 0
+var combo_timer: float = 0.0
+const COMBO_TIMEOUT = 1.5
+
+var frenzy_mode: bool = false
+var frenzy_timer: float = 0.0
+const FRENZY_DURATION = 6.0
 
 # --- Upgrade definitions ---
 const UPGRADES = {
@@ -98,7 +111,7 @@ func _apply_permanent_upgrades():
 func add_heat(value: float):
 	if not game_active:
 		return
-	var depth_mult = 1.0 + depth / 500.0
+	var depth_mult = 1.0 + depth / 1000.0
 	
 	var final_value = 0.0
 	if value > 0:
@@ -141,6 +154,7 @@ func passive_cooling(delta: float):
 func check_upgrade_shop():
 	if depth >= next_upgrade_depth and game_active:
 		next_upgrade_depth += 100
+		game_active = false
 		upgrade_shop_requested.emit()
 
 func apply_heat_resistance(level: int):
@@ -214,6 +228,33 @@ func get_random_upgrades(count: int = 3) -> Array:
 			available.append(key)
 	available.shuffle()
 	return available.slice(0, min(count, available.size()))
+
+func _process(delta):
+	if not game_active: return
+	
+	# Combo Logic
+	if combo_timer > 0:
+		combo_timer -= delta
+		if combo_timer <= 0:
+			combo_counter = 0
+			coins_changed.emit(coins) # Just to refresh UI if needed
+
+	# Frenzy Logic
+	if frenzy_mode:
+		frenzy_timer -= delta
+		if frenzy_timer <= 0:
+			frenzy_mode = false
+			frenzy_ended.emit()
+
+func trigger_frenzy():
+	frenzy_mode = true
+	frenzy_timer = FRENZY_DURATION
+	frenzy_started.emit()
+
+func increment_combo():
+	combo_counter += 1
+	combo_timer = COMBO_TIMEOUT
+	combo_updated.emit(combo_counter)
 
 func continue_run():
 	# Revive from game over

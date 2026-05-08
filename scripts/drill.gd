@@ -1,307 +1,229 @@
 extends Node2D
 
-const COLS = 7
-const COL_WIDTH = 154.0
-const GRID_OFFSET_X = 0.0
-const BASE_SPEED = 85.0
-const DRILL_WIDTH = 80.0
-const DRILL_HEIGHT = 100.0
+const DRILL_WIDTH = 54.0
+const DRILL_HEIGHT = 80.0
 
-var speed: float = BASE_SPEED
+var gs = null
 var target_col: int = 3
+var move_speed: float = 300.0
 var current_x: float = 0.0
-var grid_ref: Node2D = null
-var gs: Node = null
-var speed_penalty: float = 0.0
 
-# Visual
-var drill_anim_frame: int = 0
 var drill_anim_timer: float = 0.0
-var spark_particles: Array = []
-
-var frenzy_count: int = 0
-var frenzy_timer: float = 0.0
+var drill_anim_frame: int = 0
+var drill_y_offset: float = 0.0
+var is_drilling: bool = false
 var frenzy_mode: bool = false
-var last_mine_time: float = 0.0
+
+# Touch Controls
+var touch_start_pos: Vector2 = Vector2.ZERO
+var swipe_threshold: float = 40.0
 
 func _ready():
 	gs = get_node("/root/GameState")
 	if gs:
 		gs.game_over.connect(_on_game_over)
+		gs.frenzy_started.connect(func(): frenzy_mode = true)
+		gs.frenzy_ended.connect(func(): frenzy_mode = false)
+	
 	target_col = 3
 	current_x = _col_to_x(target_col)
-	position.x = current_x
+	position = Vector2(current_x, 0) # Start at Y=0
 	_setup_lighting()
 
 func _setup_lighting():
 	var light = PointLight2D.new()
 	light.color = Color(1.0, 0.9, 0.7)
-	light.energy = 1.7 # More punchy
-	light.texture_scale = 1.8 # Slightly wider
+	light.energy = 1.7
+	light.texture_scale = 1.8
 	light.blend_mode = Light2D.BLEND_MODE_ADD
-	light.z_index = 10 # Ensure it's above the drill body
+	light.z_index = 10
 	
 	var gradient = Gradient.new()
-	gradient.set_color(0, Color(1, 1, 1, 1)) # Center: White
-	gradient.set_color(1, Color(0, 0, 0, 0)) # Edge: Transparent
+	gradient.set_color(0, Color(1, 1, 1, 1))
+	gradient.set_color(1, Color(0, 0, 0, 0))
 	
 	var tex = GradientTexture2D.new()
 	tex.gradient = gradient
 	tex.fill = GradientTexture2D.FILL_RADIAL
 	tex.fill_from = Vector2(0.5, 0.5)
-	tex.fill_to = Vector2(0.9, 0.5) # Soft edge within bounds
-	tex.width = 1024 # Massive resolution for smoothness
+	tex.fill_to = Vector2(0.9, 0.5)
+	tex.width = 1024
 	tex.height = 1024
 	
 	light.texture = tex
 	light.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	add_child(light)
 
-func _col_to_x(col: int) -> float:
-	return GRID_OFFSET_X + col * COL_WIDTH + COL_WIDTH / 2.0
-
-var is_drilling: bool = false
-
 func _process(delta):
 	if not gs or not gs.game_active:
 		return
-
-	if frenzy_mode:
-		frenzy_timer -= delta
-		if frenzy_timer <= 0:
-			frenzy_mode = false
-			frenzy_count = 0
-	elif Time.get_ticks_msec() / 1000.0 - last_mine_time > 4.0:
-		frenzy_count = 0
-
-	var speed_mult = 1.0 + gs.depth / 1500.0
-	if frenzy_mode: speed_mult *= 1.5
-	speed = BASE_SPEED * speed_mult
+		
+	# Keyboard and Virtual Button support
+	if Input.is_action_just_pressed("ui_left"):
+		target_col = max(0, target_col - 1)
+	elif Input.is_action_just_pressed("ui_right"):
+		target_col = min(6, target_col + 1)
 	
-	if speed_penalty > 0:
-		speed_penalty = max(0.0, speed_penalty - delta * 2.0)
-	var final_speed = speed * max(0.3, 1.0 - speed_penalty)
-
-	if not grid_ref:
-		grid_ref = get_parent().get_node_or_null("Grid")
-
-	is_drilling = false
-	var target_x = _col_to_x(target_col)
-	var lateral_speed = 10.0
-	if grid_ref and _check_side_collision(target_x):
-		lateral_speed = 3.0
-		is_drilling = true
-	
-	current_x = lerp(current_x, target_x, lateral_speed * delta)
+	current_x = lerp(current_x, _col_to_x(target_col), 15.0 * delta)
 	position.x = current_x
 
-	if grid_ref:
-		grid_ref.update_grid(position.y)
-		
-		# Upgrade Shop Trigger
-		if gs and gs.game_active:
-			gs.check_upgrade_shop()
+	# Very subtle tilt logic to avoid motion sickness
+	var target_rot = (target_col - 3) * 0.04 
+	rotation = lerp_angle(rotation, target_rot, 5.0 * delta)
+	
+	# Smoke particles if high heat
+	if gs.heat > gs.max_heat * 0.7:
+		if fmod(Time.get_ticks_msec() * 0.001, 0.2) < 0.05:
+			_spawn_smoke_particle()
 
-		var collision_targets = _get_all_collision_targets()
+	# Update grid references and movement
+	var grid_node = get_node_or_null("../Grid")
+	if grid_node:
+		var row = grid_node.get_row_at_y(position.y + DRILL_HEIGHT/2.0 + 5)
+		var block = grid_node.get_block_at_row_col(row, target_col)
+		is_drilling = (block != null and not block.get("is_dug", false))
+
+		var final_speed = move_speed
+		if is_drilling: final_speed *= 0.4
+		if frenzy_mode: final_speed *= 2.5
 		
-		if not collision_targets.is_empty():
-			is_drilling = true
-			for target in collision_targets:
-				_process_drilling(target, delta)
-			position.x += randf_range(-3, 3)
-			position.y += randf_range(-1, 1)
+		if is_drilling:
+			drill_y_offset += final_speed * delta
+			if drill_y_offset >= 20.0:
+				drill_y_offset = 0.0
+				_mine_block(grid_node, row)
+			
 			var effects = get_node_or_null("/root/Effects")
-			if effects: effects.shake(1.0 if frenzy_mode else 0.4)
+			if effects: effects.shake(1.2 if frenzy_mode else 0.5)
 		else:
 			position.y += final_speed * delta
-			gs.set_depth(gs.depth + final_speed * delta * 0.05)
+			gs.set_depth(position.y * 0.05) # Sync depth with METERS
 			if not frenzy_mode:
 				gs.passive_cooling(delta)
 
 	drill_anim_timer += delta
-	var anim_speed = 0.02 if is_drilling else 0.08
-	if frenzy_mode: anim_speed *= 0.5
-	if drill_anim_timer >= anim_speed:
-		drill_anim_timer = 0.0
-		drill_anim_frame = (drill_anim_frame + 1) % 4
-		queue_redraw()
+	queue_redraw()
 
-	_update_particles(delta)
-	if is_drilling or frenzy_mode:
-		_spawn_drill_sparks()
+func _mine_block(grid, row):
+	var block = grid.get_block_at_row_col(row, target_col)
+	if block:
+		var damage = 0.25
+		if frenzy_mode: damage = 1.0
+		block["health"] -= damage
+		
+		if block["health"] <= 0:
+			block["is_dug"] = true
+			_on_block_broken(block, Vector2(target_col * 154.0 + 77, row * 120.0 + 60), row)
 
-func _check_side_collision(t_x):
-	var dir = sign(t_x - position.x)
-	if abs(dir) < 0.1: return false
-	var side_rect = Rect2(position.x + dir * DRILL_WIDTH/2.0, position.y - DRILL_HEIGHT/4.0, 5, DRILL_HEIGHT/2.0)
-	var row = grid_ref.get_row_at_y(side_rect.position.y + side_rect.size.y/2.0)
-	var col = int((side_rect.position.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH)
-	var block = grid_ref.get_block_at_row_col(row, col)
-	return block != null and not block.get("is_dug", false)
-
-func _get_all_collision_targets():
-	var targets = []
-	var b_target = _check_vertical_collision()
-	if b_target: targets.append(b_target)
-	var drill_rect = Rect2(position.x - DRILL_WIDTH/2.0, position.y - DRILL_HEIGHT/2.0, DRILL_WIDTH, DRILL_HEIGHT)
-	var row = grid_ref.get_row_at_y(position.y)
-	for c in [int((drill_rect.position.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH), 
-			  int((drill_rect.position.x + drill_rect.size.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH)]:
-		var block = grid_ref.get_block_at_row_col(row, c)
-		if block and not block.get("is_dug", false):
-			var found = false
-			for t in targets:
-				if t["block"] == block: found = true; break
-			if not found: targets.append({"block": block, "row": row, "col": c})
-	return targets
-
-func _check_vertical_collision():
-	var drill_rect = Rect2(position.x - DRILL_WIDTH/2.0 + 10, position.y + DRILL_HEIGHT/3.0, DRILL_WIDTH - 20, 10)
-	var row = grid_ref.get_row_at_y(drill_rect.position.y + drill_rect.size.y)
-	var col = int((position.x - grid_ref.GRID_OFFSET_X) / grid_ref.COL_WIDTH)
-	var block = grid_ref.get_block_at_row_col(row, col)
-	if block and not block.get("is_dug", false):
-		return {"block": block, "row": row, "col": col}
-	return null
-
-func _process_drilling(target, delta):
-	var block = target["block"]
-	if block.get("type") == 7:
-		gs.add_heat(30 * delta)
-	var damage = delta * (1.6 if frenzy_mode else 1.0) * (1.0 + gs.depth / 2000.0) 
-	block["health"] -= damage
-	if block["health"] <= 0:
-		_drill_block(block, target["row"], target["col"])
-
-func _unhandled_input(event):
-	if not gs or not gs.game_active: return
-	if event is InputEventScreenTouch and event.pressed:
-		var half = get_viewport_rect().size.x / 2.0
-		if event.position.x < half: target_col = max(0, target_col - 1)
-		else: target_col = min(COLS - 1, target_col + 1)
-	elif event.is_action_pressed("ui_left"): target_col = max(0, target_col - 1)
-	elif event.is_action_pressed("ui_right"): target_col = min(COLS - 1, target_col + 1)
-
-func _drill_block(block: Dictionary, row: int, col: int):
-	if block == null or block.get("is_dug", false): return
-	block["is_dug"] = true
-	if block.get("type") == 8:
-		_trigger_tnt_explosion(row, col)
-		return
-	last_mine_time = Time.get_ticks_msec() / 1000.0
-	frenzy_count += 1
-	if frenzy_count >= 10 and not frenzy_mode:
-		frenzy_mode = true
-		frenzy_timer = 6.0
-		var effects = get_node_or_null("/root/Effects")
-		if effects:
-			effects.spawn_floating_text(position, "FRENZY! 🔥", Color.ORANGE_RED)
-			effects.shake(2.0)
+func _on_block_broken(block: Dictionary, block_pos: Vector2, row: int):
 	gs.add_coins(block.get("coins", 0))
-	gs.add_heat(block.get("heat", 0))
-	gs.add_wear(block.get("wear", 0))
-	_spawn_break_particles(col, row, block.get("color", Color.WHITE))
+	if not frenzy_mode:
+		gs.add_heat(block.get("heat", 0))
+		gs.add_wear(block.get("wear", 0))
+	
+	gs.increment_combo()
 	var effects = get_node_or_null("/root/Effects")
 	if effects:
-		effects.shake(1.5)
-		var spawn_pos = position + Vector2(randf_range(-20, 20), -30)
-		if block.get("heat", 0) != 0:
-			var h = block["heat"]
-			effects.spawn_floating_text(spawn_pos, str(h) + " 🔥", Color.RED if h > 0 else Color.CYAN)
-		if block.get("coins", 0) > 0:
-			effects.spawn_floating_text(spawn_pos + Vector2(0, -25), "+" + str(block["coins"]) + " 🪙", Color.GOLD)
-	if grid_ref: grid_ref.queue_redraw()
+		if gs.combo_counter > 1:
+			effects.spawn_floating_text(block_pos, "COMBO x" + str(gs.combo_counter), Color.YELLOW if gs.combo_counter < 5 else Color.ORANGE_RED)
+		
+		if block.get("type") == 8: explode(block_pos)
+		elif block.get("type") == 9: gs.trigger_frenzy()
 
-func _trigger_tnt_explosion(row: int, col: int):
+	_spawn_break_particles(target_col, row, block.get("color", Color.WHITE))
+
+func explode(pos: Vector2):
 	var effects = get_node_or_null("/root/Effects")
 	if effects:
-		effects.shake(5.0)
-		effects.spawn_floating_text(position, "BOOM! 💥", Color.ORANGE)
-		if effects.has_method("spawn_explosion_flash"):
-			effects.spawn_explosion_flash(position)
+		effects.shake(15.0)
+		effects.spawn_explosion_flash(pos)
 	
-	for r in range(row - 2, row + 3): # Larger 5x5 blast
-		for c in range(col - 2, col + 3):
-			var b = grid_ref.get_block_at_row_col(r, c)
-			if b and not b.get("is_dug", false):
-				b["is_dug"] = true
-				_spawn_break_particles(c, r, b.get("color", Color.WHITE))
-				gs.add_coins(b.get("coins", 0))
-	
-	grid_ref.queue_redraw()
+	var grid = get_node_or_null("../Grid")
+	if grid:
+		var row = grid.get_row_at_y(pos.y)
+		var col = int(pos.x / 154.0)
+		for r in range(row - 2, row + 3):
+			for c in range(col - 2, col + 3):
+				var b = grid.get_block_at_row_col(r, c)
+				if b and not b.get("is_dug", false):
+					b["is_dug"] = true
+					gs.add_coins(b.get("coins", 0) / 2)
 
-func _spawn_break_particles(_col: int, _row: int, color: Color):
+func _spawn_smoke_particle():
 	var p = CPUParticles2D.new()
-	p.emitting = false
+	p.position = position + Vector2(randf_range(-15, 15), -20)
+	p.amount = 1
 	p.one_shot = true
-	p.explosiveness = 0.95
-	p.amount = 15
-	p.lifetime = 0.4
-	p.color = color
-	get_tree().current_scene.add_child(p)
-	p.global_position = position + Vector2(0, DRILL_HEIGHT/2.5)
+	p.direction = Vector2(0, -1)
+	p.spread = 45.0
+	p.gravity = Vector2(0, -200)
+	p.initial_velocity_min = 50
+	p.initial_velocity_max = 100
+	p.scale_amount_min = 4
+	p.scale_amount_max = 10
+	p.color = Color(0.3, 0.3, 0.3, 0.6)
+	get_parent().add_child(p)
 	p.emitting = true
 	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
 
-func _spawn_drill_sparks():
-	var spark = {"x": position.x + randf_range(-20, 20), "y": position.y + DRILL_HEIGHT/2.0, "vx": randf_range(-80, 80), "vy": randf_range(-120, -40), "life": 0.3, "max_life": 0.3, "color": Color(1, 0.8, 0.2), "size": randf_range(2, 4)}
-	spark_particles.append(spark)
-
-func _update_particles(delta):
-	var to_remove = []
-	for i in range(spark_particles.size()):
-		var p = spark_particles[i]
-		p["x"] += p["vx"] * delta
-		p["y"] += p["vy"] * delta
-		p["vy"] += 400 * delta
-		p["life"] -= delta
-		if p["life"] <= 0: to_remove.append(i)
-	for i in range(to_remove.size() - 1, -1, -1): spark_particles.remove_at(to_remove[i])
-	if spark_particles.size() > 0: queue_redraw()
+func _spawn_break_particles(col: int, row: int, color: Color):
+	var p = CPUParticles2D.new()
+	p.position = Vector2(col * 154.0 + 77, row * 120.0 + 60)
+	p.amount = 12
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.spread = 180.0
+	p.gravity = Vector2(0, 400)
+	p.initial_velocity_min = 150
+	p.initial_velocity_max = 250
+	p.scale_amount_min = 3
+	p.scale_amount_max = 6
+	p.color = color
+	get_tree().current_scene.add_child(p)
+	p.emitting = true
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
 
 func _draw():
-	# 1. Side Boosters
-	var track_c = Color(0.2, 0.2, 0.22)
-	draw_rect(Rect2(-DRILL_WIDTH/2 - 6, -DRILL_HEIGHT/6, 12, DRILL_HEIGHT/3), track_c, true)
-	draw_rect(Rect2(DRILL_WIDTH/2 - 6, -DRILL_HEIGHT/6, 12, DRILL_HEIGHT/3), track_c, true)
+	# Procedural Industrial Design (Restored)
+	var body_color = Color(0.9, 0.45, 0.1) 
+	if frenzy_mode: body_color = Color(0.3, 0.9, 1.0) # Neon Blue for Frenzy
 	
-	# 2. Main Capsule Body
-	var body_c = Color(0.85, 0.4, 0.15)
-	if frenzy_mode: body_c = Color(0.9, 1.0, 1.0)
-	var body_pts = PackedVector2Array()
-	for i in range(21):
-		var ang = PI + (i * PI / 20.0)
-		body_pts.append(Vector2(cos(ang) * DRILL_WIDTH/2.2, sin(ang) * DRILL_HEIGHT/2.5 - 5))
-	body_pts.append(Vector2(DRILL_WIDTH/2.2, 8)); body_pts.append(Vector2(-DRILL_WIDTH/2.2, 8))
-	draw_colored_polygon(body_pts, body_c)
-	draw_polyline(body_pts, body_c.darkened(0.4), 3.0)
+	var metal_color = Color(0.4, 0.4, 0.45)
 	
-	# 3. LEDs
-	var led_c = Color.RED if gs.heat > 70 else Color.GREEN
-	if fmod(Time.get_ticks_msec() * 0.005, 1.0) > 0.5:
-		draw_circle(Vector2(-15, -15), 3, led_c); draw_circle(Vector2(15, -15), 3, led_c)
+	# 1. Main Body (Capsule)
+	draw_rect(Rect2(-24, -30, 48, 60), body_color, true)
+	draw_circle(Vector2(0, -30), 24, body_color)
 	
-	# 4. Cockpit
-	draw_circle(Vector2(0, -DRILL_HEIGHT/4.0), DRILL_WIDTH/4.5, Color(0.1, 0.4, 0.7, 0.6))
+	# 2. Top "Head" (Dome)
+	draw_circle(Vector2(0, -35), 18, metal_color)
 	
-	# 5. Bit
-	var bit_w = DRILL_WIDTH * 0.8
-	var bit_pts = PackedVector2Array([Vector2(-bit_w/2.0, 8), Vector2(bit_w/2.0, 8), Vector2(0, DRILL_HEIGHT/2.0 + 12)])
-	draw_colored_polygon(bit_pts, Color(0.4, 0.4, 0.45))
-	draw_polyline(bit_pts, Color(0.1, 0.1, 0.1), 2.0)
+	# 3. Cockpit Window
+	draw_circle(Vector2(0, -20), 12, Color(0.2, 0.7, 1.0, 0.8)) 
+	draw_circle(Vector2(-4, -24), 3, Color(1, 1, 1, 0.4)) 
 	
-	var anim = fmod(Time.get_ticks_msec() * 0.02, 1.0)
-	for i in range(5):
-		var y_rel = fmod(float(i)/5.0 + anim, 1.0)
-		var y = 8 + (DRILL_HEIGHT/2.0 + 4) * y_rel
-		var w = bit_w/2.0 * (1.0 - y_rel)
-		draw_line(Vector2(-w, y), Vector2(w, y), Color(0, 0, 0, 0.5), 3.0)
+	# 4. Side Thrusters/Joints
+	draw_rect(Rect2(-32, 0, 8, 20), metal_color, true)
+	draw_rect(Rect2(24, 0, 8, 20), metal_color, true)
 	
-	# Spark Particles
-	for p in spark_particles:
-		draw_circle(Vector2(p.x - position.x, p.y - position.y), p.size, p.color)
+	# 5. The Bit (Animated)
+	var bit_offset = sin(drill_anim_timer * 60) * 5
+	var bit_color = Color(0.6, 0.6, 0.6)
+	if frenzy_mode: bit_color = Color(1, 1, 1)
+	
+	var bit_points = PackedVector2Array([
+		Vector2(-20, 30),
+		Vector2(20, 30),
+		Vector2(0, 55 + bit_offset)
+	])
+	draw_colored_polygon(bit_points, bit_color)
+	
+	# Bit details (spirals)
+	for i in range(3):
+		var y_spiral = 35 + i * 6
+		draw_line(Vector2(-15 + i*4, y_spiral), Vector2(15 - i*4, y_spiral), Color(0.3, 0.3, 0.3), 2.0)
 
-func _on_game_over(_reason: String):
+func _col_to_x(col: int) -> float:
+	return col * 154.0 + 77.0
+
+func _on_game_over(_reason):
 	set_process(false)
-	var tween = create_tween()
-	tween.tween_property(self, "modulate:a", 0.0, 1.0)

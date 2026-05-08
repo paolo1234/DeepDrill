@@ -69,6 +69,11 @@ func generate_row(idx: int) -> Array:
 		if roll > 0.98:
 			row.append({"type": 8, "is_dug": false, "health": 0.5, "max_health": 0.5, "color": Color(1, 0, 0), "coins": 10}) # TNT
 			continue
+		
+		# FRENZY chance (very rare)
+		if roll > 0.97 and roll <= 0.98:
+			row.append({"type": 9, "is_dug": false, "health": 0.1, "max_health": 0.1, "color": Color(1, 0, 1), "coins": 50}) # FRENZY
+			continue
 
 		var block_type = 1 
 		var accum = 0.0
@@ -206,6 +211,16 @@ func _draw():
 						draw_line(Vector2(cx+5, cy-20), Vector2(cx+15, cy-35), Color(0.4, 0.3, 0.2), 3.0)
 						if fmod(Time.get_ticks_msec() * 0.01, 1.0) > 0.5:
 							draw_circle(Vector2(cx+15, cy-35), 4, Color(1, 0.8, 0.2))
+					9: # Frenzy (Neon Purple)
+						var cx = x + COL_WIDTH / 2
+						var cy = y + ROW_HEIGHT / 2
+						var time = Time.get_ticks_msec() * 0.01
+						var pulse = 0.8 + sin(time) * 0.2
+						draw_circle(Vector2(cx, cy), 30 * pulse, Color(0.8, 0, 1, 0.6))
+						draw_rect(Rect2(cx-15, cy-15, 30, 30), Color(1, 0, 1), true)
+						# Lightning bolt
+						var pts = PackedVector2Array([Vector2(cx+5, cy-20), Vector2(cx-10, cy+5), Vector2(cx+2, cy+5), Vector2(cx-5, cy+20)])
+						draw_polyline(pts, Color(1, 1, 1), 3.0)
 				
 				# CRACKS based on health
 				var health_pct = block["health"] / block["max_health"]
