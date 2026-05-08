@@ -1,19 +1,18 @@
 extends CanvasLayer
 
-@onready var depth_label: Label = $MarginContainer/VBoxContainer/TopStats/DepthLabel
-@onready var coins_label: Label = $MarginContainer/VBoxContainer/TopStats/CoinsLabel
-@onready var heat_bar: ProgressBar = $MarginContainer/VBoxContainer/HeatBox/HeatBar
-@onready var heat_label: Label = $MarginContainer/VBoxContainer/HeatBox/HeatValue
-@onready var dura_bar: ProgressBar = $MarginContainer/VBoxContainer/DuraBox/DuraBar
-@onready var dura_label: Label = $MarginContainer/VBoxContainer/DuraBox/DuraValue
-
 var gs = null
+var heat_label_new = null
+var dura_label_new = null
+var depth_label_new = null
+var coins_label_new = null
 
 func _ready():
-	# Make HUD container transparent to mouse
-	$MarginContainer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Hide legacy UI elements
+	if has_node("MarginContainer"):
+		$MarginContainer.hide()
 	
-	_setup_bar_styles()
+	# Create Custom Premium HUD Layout
+	_create_premium_hud()
 	_create_mobile_controls()
 	
 	gs = get_node_or_null("/root/GameState")
@@ -22,7 +21,56 @@ func _ready():
 		gs.durability_changed.connect(_on_durability_changed)
 		gs.coins_changed.connect(_on_coins_changed)
 		gs.depth_changed.connect(_on_depth_changed)
-		_update_initial_values()
+
+func _create_premium_hud():
+	var root = Control.new()
+	root.name = "PremiumHUD"
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+
+	# Cards (Pills)
+	var heat_card = _create_stat_card(Vector2(20, 20), "🌡️", Color(1.0, 0.4, 0.2))
+	heat_label_new = heat_card.get_node("Margin/ValueLabel")
+	root.add_child(heat_card)
+
+	var depth_card = _create_stat_card(Vector2(get_viewport().get_visible_rect().size.x / 2 - 110, 20), "📏", Color(0.4, 0.4, 0.5))
+	depth_label_new = depth_card.get_node("Margin/ValueLabel")
+	root.add_child(depth_card)
+
+	var dura_card = _create_stat_card(Vector2(20, get_viewport().get_visible_rect().size.y - 100), "🔧", Color(0.2, 0.6, 1.0))
+	dura_label_new = dura_card.get_node("Margin/ValueLabel")
+	root.add_child(dura_card)
+
+	var coins_card = _create_stat_card(Vector2(get_viewport().get_visible_rect().size.x / 2 - 110, get_viewport().get_visible_rect().size.y - 100), "💰", Color(1.0, 0.8, 0.2))
+	coins_label_new = coins_card.get_node("Margin/ValueLabel")
+	root.add_child(coins_card)
+
+func _create_stat_card(pos: Vector2, icon: String, color: Color) -> PanelContainer:
+	var pc = PanelContainer.new()
+	pc.position = pos
+	pc.custom_minimum_size = Vector2(220, 60)
+	
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.1, 0.85)
+	style.corner_radius_top_left = 30; style.corner_radius_top_right = 30
+	style.corner_radius_bottom_right = 30; style.corner_radius_bottom_left = 30
+	style.border_width_bottom = 4; style.border_color = color
+	style.content_margin_left = 15; style.content_margin_right = 15
+	pc.add_theme_stylebox_override("panel", style)
+	
+	var margin = MarginContainer.new()
+	margin.name = "Margin"
+	pc.add_child(margin)
+	
+	var label = Label.new()
+	label.name = "ValueLabel"
+	label.text = icon + " --"
+	label.add_theme_font_size_override("font_size", 24)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	margin.add_child(label)
+	
+	return pc
 
 func _create_mobile_controls():
 	var controls = Control.new()
@@ -31,121 +79,65 @@ func _create_mobile_controls():
 	controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(controls)
 
-	# Left Button
+	# Navigation
 	var btn_left = Button.new()
-	btn_left.name = "BtnLeft"
-	btn_left.text = " < "
-	btn_left.custom_minimum_size = Vector2(180, 180)
-	btn_left.position = Vector2(50, get_viewport().get_visible_rect().size.y - 250)
-	_style_mobile_button(btn_left)
-	btn_left.pressed.connect(func(): _on_virtual_key("ui_left"))
+	btn_left.text = "◀"
+	btn_left.custom_minimum_size = Vector2(160, 160)
+	btn_left.position = Vector2(50, get_viewport().get_visible_rect().size.y - 210)
+	_style_round_btn(btn_left, Color(0.3, 0.3, 0.3, 0.4))
+	btn_left.pressed.connect(func(): _sim_key("ui_left"))
 	controls.add_child(btn_left)
 
-	# Right Button
 	var btn_right = Button.new()
-	btn_right.name = "BtnRight"
-	btn_right.text = " > "
-	btn_right.custom_minimum_size = Vector2(180, 180)
-	btn_right.position = Vector2(get_viewport().get_visible_rect().size.x - 230, get_viewport().get_visible_rect().size.y - 250)
-	_style_mobile_button(btn_right)
-	btn_right.pressed.connect(func(): _on_virtual_key("ui_right"))
+	btn_right.text = "▶"
+	btn_right.custom_minimum_size = Vector2(160, 160)
+	btn_right.position = Vector2(get_viewport().get_visible_rect().size.x - 210, get_viewport().get_visible_rect().size.y - 210)
+	_style_round_btn(btn_right, Color(0.3, 0.3, 0.3, 0.4))
+	btn_right.pressed.connect(func(): _sim_key("ui_right"))
 	controls.add_child(btn_right)
 
-func _style_mobile_button(btn: Button):
+	# Pause
+	var btn_pause = Button.new()
+	btn_pause.text = "⏸"
+	btn_pause.custom_minimum_size = Vector2(100, 100)
+	btn_pause.position = Vector2(get_viewport().get_visible_rect().size.x - 120, 20)
+	_style_round_btn(btn_pause, Color(0.4, 0.4, 0.5, 0.6))
+	btn_pause.pressed.connect(_on_pause_pressed)
+	controls.add_child(btn_pause)
+
+func _style_round_btn(btn: Button, color: Color):
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.25, 0.4) # Semi-transparent
-	style.border_width_left = 3; style.border_width_top = 3
-	style.border_width_right = 3; style.border_width_bottom = 3
-	style.border_color = Color(0.5, 0.5, 0.6, 0.6)
-	style.corner_radius_top_left = 90; style.corner_radius_top_right = 90
-	style.corner_radius_bottom_right = 90; style.corner_radius_bottom_left = 90
+	style.bg_color = color
+	style.corner_radius_top_left = 100; style.corner_radius_top_right = 100
+	style.corner_radius_bottom_right = 100; style.corner_radius_bottom_left = 100
+	style.border_width_left = 4; style.border_width_top = 4; style.border_width_right = 4; style.border_width_bottom = 4
+	style.border_color = Color(1, 1, 1, 0.15)
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", style)
 	btn.add_theme_stylebox_override("pressed", style)
-	btn.add_theme_font_size_override("font_size", 64)
+	btn.add_theme_font_size_override("font_size", 48)
 
-func _on_virtual_key(action: String):
-	# Simulate keyboard input for the drill
+func _sim_key(action: String):
 	var ev = InputEventAction.new()
-	ev.action = action
-	ev.pressed = true
-	Input.parse_input_event(ev)
-	# Release immediately
+	ev.action = action; ev.pressed = true; Input.parse_input_event(ev)
 	var ev_up = InputEventAction.new()
-	ev_up.action = action
-	ev_up.pressed = false
-	Input.parse_input_event(ev_up)
+	ev_up.action = action; ev_up.pressed = false; Input.parse_input_event(ev_up)
 
-func _setup_bar_styles():
-	var heat_bg = StyleBoxFlat.new()
-	heat_bg.bg_color = Color(0.1, 0.1, 0.15, 1)
-	heat_bg.border_width_left = 2; heat_bg.border_width_top = 2
-	heat_bg.border_width_right = 2; heat_bg.border_width_bottom = 2
-	heat_bg.border_color = Color(0.05, 0.05, 0.1, 1)
-	heat_bg.corner_radius_top_left = 8; heat_bg.corner_radius_top_right = 8
-	heat_bg.corner_radius_bottom_left = 8; heat_bg.corner_radius_bottom_right = 8
-	heat_bar.add_theme_stylebox_override("background", heat_bg)
-	
-	var heat_fill = StyleBoxFlat.new()
-	heat_fill.bg_color = Color(0.9, 0.3, 0.1, 1) # Orange/Red
-	heat_fill.corner_radius_top_left = 8; heat_fill.corner_radius_top_right = 8
-	heat_fill.corner_radius_bottom_left = 8; heat_fill.corner_radius_bottom_right = 8
-	heat_bar.add_theme_stylebox_override("fill", heat_fill)
-	heat_bar.custom_minimum_size = Vector2(0, 16)
-	
-	var dura_bg = heat_bg.duplicate()
-	dura_bar.add_theme_stylebox_override("background", dura_bg)
-	
-	var dura_fill = heat_fill.duplicate()
-	dura_fill.bg_color = Color(0.2, 0.5, 0.9, 1) # Blue
-	dura_bar.add_theme_stylebox_override("fill", dura_fill)
-	dura_bar.custom_minimum_size = Vector2(0, 16)
+func _on_pause_pressed():
+	if gs: gs.game_active = !gs.game_active
 
-func _update_initial_values():
-	if not gs:
-		return
-	_on_depth_changed(gs.depth)
-	_on_coins_changed(gs.coins)
-	_on_heat_changed(gs.heat, gs.max_heat)
-	_on_durability_changed(gs.durability, gs.max_durability)
+func _on_heat_changed(val, max_val):
+	if heat_label_new:
+		heat_label_new.text = "🌡️ %d%%" % int((val/max_val)*100 if max_val > 0 else 0)
 
-func _process(delta):
-	if gs and gs.game_active:
-		# Pulse heat bar if near overheating
-		if gs.heat > gs.max_heat * 0.8:
-			var pulse = 0.5 + sin(Time.get_ticks_msec() * 0.01) * 0.5
-			heat_bar.modulate = Color(1, 1, 1).lerp(Color(2, 0.5, 0.5), pulse)
-			
-			# Very subtle screen flash
-			if fmod(Time.get_ticks_msec() * 0.005, 1.0) > 0.8:
-				_flash_screen(Color(0.8, 0.1, 0.1, 0.1))
-		else:
-			heat_bar.modulate = Color(1, 1, 1)
+func _on_durability_changed(val, max_val):
+	if dura_label_new:
+		dura_label_new.text = "🔧 %d%%" % int((val/max_val)*100 if max_val > 0 else 0)
 
-func _flash_screen(color: Color):
-	var flash = ColorRect.new()
-	flash.color = color
-	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
-	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(flash)
-	get_tree().create_timer(0.1).timeout.connect(flash.queue_free)
+func _on_coins_changed(new_coins: int):
+	if coins_label_new:
+		coins_label_new.text = "💰 %d" % new_coins
 
-func _on_depth_changed(value: float):
-	if is_instance_valid(depth_label):
-		depth_label.text = "Depth: %d m" % int(value)
-
-func _on_heat_changed(value: float, max_val: float):
-	if is_instance_valid(heat_label):
-		heat_label.text = "%d/%d" % [int(value), int(max_val)]
-	if is_instance_valid(heat_bar) and max_val > 0:
-		heat_bar.value = (value / max_val) * 100
-
-func _on_durability_changed(value: float, max_val: float):
-	if is_instance_valid(dura_label):
-		dura_label.text = "%d/%d" % [int(value), int(max_val)]
-	if is_instance_valid(dura_bar) and max_val > 0:
-		dura_bar.value = (value / max_val) * 100
-
-func _on_coins_changed(value: int):
-	if is_instance_valid(coins_label):
-		coins_label.text = "Coins: %d" % value
+func _on_depth_changed(new_depth: float):
+	if depth_label_new:
+		depth_label_new.text = "📏 %d m" % int(new_depth)

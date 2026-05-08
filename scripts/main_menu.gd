@@ -14,6 +14,32 @@ func _ready():
 	sm = get_node_or_null("/root/SaveManager")
 	update_stats()
 	_populate_shop()
+	_style_menu()
+
+func _style_menu():
+	# Recursively style ALL buttons in the menu
+	_style_all_buttons(self)
+
+func _style_all_buttons(node: Node):
+	if node is Button:
+		_apply_casual_btn_style(node)
+	for child in node.get_children():
+		_style_all_buttons(child)
+
+func _apply_casual_btn_style(btn: Button):
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.6, 0.4) # Fresh Green
+	style.corner_radius_top_left = 30; style.corner_radius_top_right = 30
+	style.corner_radius_bottom_right = 30; style.corner_radius_bottom_left = 30
+	style.border_width_bottom = 8; style.border_color = Color(0.1, 0.4, 0.3) # 3D effect
+	
+	var style_p = style.duplicate()
+	style_p.border_width_bottom = 2; style_p.bg_color = Color(0.15, 0.5, 0.35)
+	
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", style)
+	btn.add_theme_stylebox_override("pressed", style_p)
+	btn.add_theme_font_size_override("font_size", 32)
 
 func update_stats():
 	if not sm:
