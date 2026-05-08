@@ -12,6 +12,11 @@ func _ready():
 	_pause_game()
 	continue_btn.pressed.connect(_on_continue_pressed)
 	
+	# Hide HUD during shop
+	var hud = get_tree().root.find_child("HUD", true, false)
+	if hud and hud.has_method("set_hud_visible"):
+		hud.set_hud_visible(false)
+	
 	var gs = get_node_or_null("/root/GameState")
 	if gs:
 		depth_label.text = "UPGRADE STATION - %d m" % int(gs.depth)
@@ -136,5 +141,8 @@ func _purchase_upgrade(upgrade_id: String):
 
 func _on_continue_pressed():
 	queue_free()
+	var hud = get_tree().root.find_child("HUD", true, false)
+	if hud and hud.has_method("set_hud_visible"):
+		hud.set_hud_visible(true)
 	var gs = get_node_or_null("/root/GameState")
 	if gs: gs.game_active = true

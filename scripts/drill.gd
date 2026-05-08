@@ -95,7 +95,8 @@ func _process(delta):
 			if effects: effects.shake(1.2 if frenzy_mode else 0.5)
 		else:
 			position.y += final_speed * delta
-			gs.set_depth(position.y * 0.05)
+			if gs and gs.game_active:
+				gs.depth = position.y * 0.05
 			if not frenzy_mode:
 				gs.passive_cooling(delta)
 

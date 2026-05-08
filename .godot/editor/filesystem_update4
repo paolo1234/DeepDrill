@@ -1,3 +1,9 @@
 res://scripts/effects.gd
 res://scripts/gamestate.gd
 res://scripts/main_menu.gd
+res://scripts/audio_manager.gd
+res://scripts/drill.gd
+res://scripts/hud.gd
+res://scripts/main.gd
+res://scripts/tutorial_overlay.gd
+res://scripts/upgrade_shop.gd

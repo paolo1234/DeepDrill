@@ -15,6 +15,7 @@ func _ready():
 	# Setup Music Player
 	music_player = AudioStreamPlayer.new()
 	music_player.bus = "Music"
+	music_player.finished.connect(func(): music_player.play())
 	add_child(music_player)
 	
 	# Setup SFX Pool
@@ -35,8 +36,6 @@ func _ensure_bus_exists(bus_name: String):
 func _start_bgm():
 	if FileAccess.file_exists(music_path):
 		var stream = load(music_path)
-		if stream is AudioStreamMP3:
-			stream.loop = true
 		music_player.stream = stream
 		music_player.play()
 	else:

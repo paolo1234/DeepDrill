@@ -5,9 +5,10 @@ var grid = null
 var hud = null
 var camera = null
 var upgrade_shop = null
+var gs = null
 
 func _ready():
-	var gs = get_node("/root/GameState")
+	gs = get_node("/root/GameState")
 	if gs:
 		gs.reset()
 		gs.game_active = false
@@ -96,6 +97,8 @@ func _process(delta):
 		if grid:
 			grid.update_grid(drill.position.y)
 			var depth = drill.position.y * 0.05
+			if gs:
+				gs.depth = depth
 			_update_background_color(depth)
 
 func _update_background_color(depth: float):
@@ -208,7 +211,6 @@ func show_game_over(reason: String):
 	stats_grid.add_theme_constant_override("v_separation", 15)
 	vbox.add_child(stats_grid)
 
-	var gs = get_node_or_null("/root/GameState")
 	var sm = get_node_or_null("/root/SaveManager")
 	
 	_add_stat_row(stats_grid, "📏 Depth", str(int(gs.depth)) + " m")

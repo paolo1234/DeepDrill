@@ -26,10 +26,16 @@ func _apply_casual_btn_style(btn: Button):
 		color = Color(0.1, 0.5, 0.95)
 		icon = "▶"
 		btn.text = icon + " START DRILLING"
+		for conn in btn.pressed.get_connections():
+			btn.pressed.disconnect(conn.callable)
+		btn.pressed.connect(_on_start_pressed)
 	elif "SHOP" in t or "PERMANENT" in t:
 		color = Color(0.95, 0.55, 0.1)
 		icon = "💰"
 		btn.text = icon + " UPGRADE SHOP"
+		for conn in btn.pressed.get_connections():
+			btn.pressed.disconnect(conn.callable)
+		btn.pressed.connect(_on_shop_pressed)
 	elif "SETTINGS" in t:
 		color = Color(0.6, 0.4, 0.9)
 		icon = "⚙"

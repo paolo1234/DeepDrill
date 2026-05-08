@@ -8,6 +8,10 @@ func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_ui()
 	
+	var hud = get_tree().root.find_child("HUD", true, false)
+	if hud and hud.has_method("set_touch_visible"):
+		hud.set_touch_visible(false)
+	
 	# Prevent accidental click
 	await get_tree().create_timer(0.8).timeout
 	can_start = true
@@ -108,4 +112,7 @@ func _start():
 		get_node("/root/AudioManager").play_button_click()
 	var gs = get_node_or_null("/root/GameState")
 	if gs: gs.game_active = true
+	var hud = get_tree().root.find_child("HUD", true, false)
+	if hud and hud.has_method("set_touch_visible"):
+		hud.set_touch_visible(true)
 	queue_free()

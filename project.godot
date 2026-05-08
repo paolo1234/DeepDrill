@@ -17,6 +17,16 @@ config/features=PackedStringArray("4.6")
 boot_splash/show_image=false
 
 [autoload]
+McpInteractionServer="*res://scripts/mcp_interaction_server.gd"
+
+
+
+
+
+
+
+
+
 
 
 

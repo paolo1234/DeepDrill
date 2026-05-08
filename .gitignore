@@ -1,0 +1,5 @@
+Deep Drill.apk
+Deep Drill.apk.idsig
+# Godot-specific ignores
+.godot/
+*.import

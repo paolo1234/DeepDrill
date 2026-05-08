@@ -11,17 +11,17 @@ signal frenzy_started
 signal frenzy_ended
 
 # --- Run state ---
-var depth: float = 0.0
+var depth: float = 0.0:
+	set(val):
+		depth = val
+		depth_changed.emit(depth)
+		check_upgrade_shop()
+
 var heat: float = 0.0
 var max_heat: float = 100.0
 var durability: float = 100.0
 var max_durability: float = 100.0
 var coins: int = 0
-
-func set_depth(val: float):
-	depth = val
-	depth_changed.emit(depth)
-	check_upgrade_shop()
 
 var heat_resistance: float = 0.0
 var cooling_bonus: float = 0.0
@@ -67,7 +67,7 @@ const PERM_UPGRADES = {
 }
 
 func reset():
-	set_depth(0.0)
+	depth = 0.0
 	heat = 0.0
 	max_heat = 100.0
 	durability = 100.0
