@@ -46,47 +46,33 @@ func get_tier(depth: float) -> int:
 	else: return 5
 
 func generate_row(idx: int) -> Array:
-	var depth = idx * ROW_HEIGHT * 0.05  # Convert row to depth meters
+	var depth = idx * ROW_HEIGHT * 0.05
 	var tier = get_tier(depth)
 	var weights = TIER_WEIGHTS[tier]
 	var row = []
 
-	# Guarantee at least 2 empty/soft paths that connect to the previous row
-	var empty_cols = []
-	# The new path center must be within 1 column of the last path center
-	var path_center = clampi(last_path_center + rng.randi_range(-1, 1), 1, COLS - 2)
-	empty_cols.append(path_center)
-	empty_cols.append(path_center - 1)
-	empty_cols.append(path_center + 1)
+	# No more guaranteed paths. The player MUST drill.
+	# We only leave very rare 1-block openings.
 	
-	# Random chance to have an extra opening
-	if rng.randf() < 0.3:
-		empty_cols.append(rng.randi_range(0, COLS - 1))
-	
-	last_path_center = path_center
-
-	# Every 5 rows: guaranteed gold/diamond cluster
-	var cluster_col = -1
-	if idx % 5 == 0 and idx > 0:
-		cluster_col = rng.randi_range(0, COLS - 1)
-		while cluster_col in empty_cols:
-			cluster_col = rng.randi_range(0, COLS - 1)
-
 	for c in range(COLS):
-		if c in empty_cols:
-			row.append(null)  # empty/path
-			continue
-		if c == cluster_col:
-			# Gold or diamond cluster
-			if depth > 300 and rng.randf() < 0.4:
-				row.append(_create_block(5))  # Diamond
+		var roll = rng.randf()
+		
+		# More generous spacing (20% empty/gas)
+		if roll < 0.2:
+			if rng.randf() < 0.2:
+				row.append({"type": 7, "is_dug": false, "health": 0.1, "max_health": 0.1, "color": Color(0.2, 0.8, 0.2, 0.4)}) # GAS
 			else:
-				row.append(_create_block(4))  # Gold
+				row.append(null) # Empty
 			continue
 
-		var roll = rng.randf()
-		var block_type = 1  # default to dirt
+		# TNT chance (rare but helpful)
+		if roll > 0.98:
+			row.append({"type": 8, "is_dug": false, "health": 0.5, "max_health": 0.5, "color": Color(1, 0, 0), "coins": 10}) # TNT
+			continue
+
+		var block_type = 1 
 		var accum = 0.0
+		# Adjust weights to be more forgiving in tiers
 		for i in range(weights.size()):
 			accum += weights[i]
 			if roll <= accum:
@@ -206,6 +192,20 @@ func _draw():
 							var by = y + 20 + fmod(i * 25, ROW_HEIGHT - 40)
 							var bsize = 8 + sin(time + i) * 4
 							draw_circle(Vector2(bx, by), bsize, Color(1, 0.8, 0.2))
+					8: # TNT
+						var cx = x + COL_WIDTH / 2
+						var cy = y + ROW_HEIGHT / 2
+						# 3 red cylinders
+						for i in range(-1, 2):
+							var stick_rect = Rect2(cx + i*14 - 6, cy - 20, 12, 40)
+							draw_rect(stick_rect, Color(0.8, 0.1, 0.1), true)
+							draw_rect(stick_rect, Color(0, 0, 0), false, 1.5)
+						# White strap
+						draw_rect(Rect2(cx-20, cy-5, 40, 6), Color(0.9, 0.9, 0.9), true)
+						# Fuse
+						draw_line(Vector2(cx+5, cy-20), Vector2(cx+15, cy-35), Color(0.4, 0.3, 0.2), 3.0)
+						if fmod(Time.get_ticks_msec() * 0.01, 1.0) > 0.5:
+							draw_circle(Vector2(cx+15, cy-35), 4, Color(1, 0.8, 0.2))
 				
 				# CRACKS based on health
 				var health_pct = block["health"] / block["max_health"]

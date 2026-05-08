@@ -57,9 +57,9 @@ func _create_background():
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg_layer.add_child(bg)
 	
-	# Darken the foreground (Grid and Drill) for lighting effect
+	# Much deeper darkness for high contrast
 	var canvas_modulate = CanvasModulate.new()
-	canvas_modulate.color = Color(0.2, 0.2, 0.25, 1)
+	canvas_modulate.color = Color(0.06, 0.06, 0.09, 1) 
 	add_child(canvas_modulate)
 
 func _process(delta):

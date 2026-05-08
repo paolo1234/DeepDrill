@@ -130,8 +130,12 @@ func add_coins(value: int):
 func passive_cooling(delta: float):
 	if not game_active:
 		return
-	var cooling = base_cooling_rate * (1.0 + cooling_bonus) * delta
-	heat = clamp(heat - cooling, 0, max_heat)
+	
+	# Ambient heat increases with depth: 0 at depth 0, 1.0 at depth 500
+	var ambient_heat = depth / 500.0
+	var cooling = (base_cooling_rate * (1.0 + cooling_bonus)) - ambient_heat
+	
+	heat = clamp(heat - cooling * delta, 0, max_heat)
 	heat_changed.emit(heat, max_heat)
 
 func check_upgrade_shop():
