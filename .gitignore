@@ -1,5 +1,30 @@
-Deep Drill.apk
-Deep Drill.apk.idsig
 # Godot-specific ignores
 .godot/
-*.import
+
+# Imported assets (Godot 4 stores these in .godot/imported, but .import files must be tracked)
+# DO NOT ignore *.import
+
+# Build artifacts and exports
+*.apk
+*.aab
+*.idsig
+*.exe
+*.dll
+*.so
+*.dylib
+*.js
+*.wasm
+*.pck
+*.zip
+
+# Log files and temporary data
+*.log
+*.tmp
+override.cfg
+
+# Tool-specific ignores
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
