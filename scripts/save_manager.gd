@@ -7,7 +7,7 @@ var save_data = {
 	"best_depth": 0.0,
 	"permanent_upgrades": {},
 	"inventory": {},
-	"settings": {"music": 1.0, "sfx": 1.0}
+	"settings": {"master": 1.0, "music": 1.0, "sfx": 1.0}
 }
 
 func _ready():

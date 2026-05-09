@@ -10,7 +10,6 @@ func show_rewarded(ad_type: String, callback: Callable) -> void:
     await get_tree().create_timer(0.5).timeout
     callback.call(true)
     ad_completed.emit(ad_type, true)
-    _ad_cooldowns[ad_type] = true
 
 func show_banner() -> void:
     print("[AD] Banner shown")

@@ -222,6 +222,39 @@ func show_game_over(reason: String):
 
 	vbox.add_child(Control.new()) # Spacer
 
+	# Ad Buttons
+	var am = get_node_or_null("/root/AdManager")
+	var can_continue = am and am.can_use_rewarded("continue_run")
+	var can_double = am and am.can_use_rewarded("double_loot")
+	
+	if can_continue:
+		var continue_btn = Button.new()
+		continue_btn.text = "▶ CONTINUE - Watch Ad"
+		continue_btn.custom_minimum_size = Vector2(0, 65)
+		var c_style = StyleBoxFlat.new()
+		c_style.bg_color = Color(0.1, 0.4, 0.8, 1)
+		c_style.corner_radius_top_left = 10; c_style.corner_radius_bottom_right = 10
+		c_style.border_width_bottom = 6; c_style.border_color = Color(0.05, 0.2, 0.5)
+		continue_btn.add_theme_stylebox_override("normal", c_style)
+		continue_btn.add_theme_font_size_override("font_size", 24)
+		continue_btn.pressed.connect(func(): _show_continue_ad(overlay_layer, panel))
+		vbox.add_child(continue_btn)
+	
+	if can_double:
+		var double_btn = Button.new()
+		double_btn.text = "×2 DOUBLE LOOT - Watch Ad"
+		double_btn.custom_minimum_size = Vector2(0, 55)
+		var d_style = StyleBoxFlat.new()
+		d_style.bg_color = Color(0.8, 0.6, 0.1, 1)
+		d_style.corner_radius_top_left = 10; d_style.corner_radius_bottom_right = 10
+		d_style.border_width_bottom = 5; d_style.border_color = Color(0.5, 0.3, 0.0)
+		double_btn.add_theme_stylebox_override("normal", d_style)
+		double_btn.add_theme_font_size_override("font_size", 24)
+		double_btn.pressed.connect(func(): _show_double_loot_ad(overlay_layer, panel, sm))
+		vbox.add_child(double_btn)
+
+	vbox.add_child(Control.new()) # Spacer
+
 	# Buttons
 	var restart_btn = Button.new()
 	restart_btn.text = "REPAIR & RESTART"
@@ -256,3 +289,100 @@ func _add_stat_row(parent, label_text, value_text):
 	v.add_theme_font_size_override("font_size", 18)
 	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	parent.add_child(v)
+
+func _show_continue_ad(layer, panel):
+	var am = get_node_or_null("/root/AdManager")
+	if am:
+		am.show_rewarded("continue_run", func(success):
+			if success:
+				_continue_run(layer)
+		)
+
+func _show_double_loot_ad(layer, panel, sm):
+	var am = get_node_or_null("/root/AdManager")
+	if am:
+		am.show_rewarded("double_loot", func(success):
+			if success:
+				am.mark_used("double_loot")
+				if sm:
+					sm.add_coins(gs.coins)
+				_update_game_over_coins(layer, panel, gs.coins * 2)
+		)
+
+func _continue_run(layer):
+	get_tree().paused = false
+	layer.queue_free()
+	var gs = get_node_or_null("/root/GameState")
+	if gs:
+		gs.continue_run()
+	
+	if drill:
+		drill.set_process(true)
+		drill.set_physics_process(true)
+	
+	if camera:
+		camera.enabled = true
+	
+	if hud and hud.has_method("set_hud_visible"):
+		hud.set_hud_visible(true)
+	if hud and hud.has_method("set_touch_visible"):
+		hud.set_touch_visible(true)
+
+func _update_game_over_coins(layer, panel, new_coins):
+	for child in panel.get_children():
+		child.queue_free()
+	_build_game_over_again(panel, new_coins)
+
+func _build_game_over_again(panel, new_coins):
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_top", 30)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_bottom", 30)
+	panel.add_child(margin)
+	
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 20)
+	margin.add_child(vbox)
+	
+	var title = Label.new()
+	title.text = "LOOT DOUBLED!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 42)
+	title.modulate = Color(1, 0.9, 0.2)
+	vbox.add_child(title)
+	
+	vbox.add_child(HSeparator.new())
+	
+	var stats_grid = GridContainer.new()
+	stats_grid.columns = 2
+	stats_grid.add_theme_constant_override("h_separation", 40)
+	stats_grid.add_theme_constant_override("v_separation", 15)
+	vbox.add_child(stats_grid)
+	
+	_add_stat_row(stats_grid, "📏 Depth", str(int(gs.depth)) + " m")
+	_add_stat_row(stats_grid, "💰 Coins", str(new_coins))
+	
+	vbox.add_child(Control.new())
+	
+	var restart_btn = Button.new()
+	restart_btn.text = "DRILL AGAIN"
+	restart_btn.custom_minimum_size = Vector2(0, 60)
+	var btn_style = StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.2, 0.6, 0.3, 1)
+	btn_style.corner_radius_top_left = 10; btn_style.corner_radius_bottom_right = 10
+	restart_btn.add_theme_stylebox_override("normal", btn_style)
+	restart_btn.pressed.connect(func(): 
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/main.tscn")
+	)
+	vbox.add_child(restart_btn)
+	
+	var menu_btn = Button.new()
+	menu_btn.text = "BACK TO BASE"
+	menu_btn.flat = true
+	menu_btn.pressed.connect(func(): 
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	)
+	vbox.add_child(menu_btn)

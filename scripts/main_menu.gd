@@ -102,9 +102,12 @@ func _create_settings_panel():
 	title.add_theme_font_size_override("font_size", 56)
 	vbox.add_child(title)
 	
-	_create_vol_slider(vbox, "MASTER VOLUME", 0)
-	_create_vol_slider(vbox, "MUSIC VOLUME", 1)
-	_create_vol_slider(vbox, "EFFECTS VOLUME", 2)
+	var sm = get_node_or_null("/root/SaveManager")
+	var settings = sm.save_data.get("settings", {}) if sm else {} if sm else {}
+	
+	_create_vol_slider(vbox, "MASTER VOLUME", "Master", settings.get("master", 1.0))
+	_create_vol_slider(vbox, "MUSIC VOLUME", "Music", settings.get("music", 1.0))
+	_create_vol_slider(vbox, "EFFECTS VOLUME", "SFX", settings.get("sfx", 1.0))
 	
 	var btn_close = Button.new()
 	btn_close.text = "CLOSE"
@@ -114,10 +117,10 @@ func _create_settings_panel():
 	c_style.corner_radius_top_left = 30; c_style.corner_radius_top_right = 30
 	c_style.corner_radius_bottom_right = 30; c_style.corner_radius_bottom_left = 30
 	btn_close.add_theme_stylebox_override("normal", c_style)
-	btn_close.pressed.connect(func(): settings_panel.visible = false)
+	btn_close.pressed.connect(_save_and_close_settings)
 	vbox.add_child(btn_close)
 
-func _create_vol_slider(parent: VBoxContainer, label: String, bus_idx: int):
+func _create_vol_slider(parent: VBoxContainer, label: String, bus_name: String, initial_volume: float):
 	var cont = VBoxContainer.new()
 	parent.add_child(cont)
 	var lbl = Label.new()
@@ -125,11 +128,48 @@ func _create_vol_slider(parent: VBoxContainer, label: String, bus_idx: int):
 	lbl.add_theme_font_size_override("font_size", 20)
 	cont.add_child(lbl)
 	var slider = HSlider.new()
-	slider.min_value = -60; slider.max_value = 0
-	slider.value = AudioServer.get_bus_volume_db(bus_idx)
+	slider.min_value = 0; slider.max_value = 1.0
+	slider.step = 0.05
+	slider.value = initial_volume
 	slider.custom_minimum_size.x = 400
-	slider.value_changed.connect(func(val): AudioServer.set_bus_volume_db(bus_idx, val))
+	
+	var bus_idx = AudioServer.get_bus_index(bus_name)
+	if bus_idx >= 0:
+		slider.value = db_to_linear(AudioServer.get_bus_volume_db(bus_idx))
+	
+	slider.value_changed.connect(func(val): 
+		var idx = AudioServer.get_bus_index(bus_name)
+		if idx >= 0:
+			AudioServer.set_bus_volume_db(idx, linear_to_db(val))
+	)
+	slider.set_meta("bus_name", bus_name)
 	cont.add_child(slider)
+
+func _save_and_close_settings():
+	var sm = get_node_or_null("/root/SaveManager")
+	if not sm: 
+		settings_panel.visible = false
+		return
+	
+	var settings = {}
+	var sliders = []
+	_find_sliders(settings_panel, sliders)
+	
+	for slider in sliders:
+		var bus_name = slider.get_meta("bus_name", "")
+		if bus_name != "":
+			settings[bus_name.to_lower()] = slider.value
+	
+	sm.save_data["settings"] = settings
+	sm.save_game()
+	settings_panel.visible = false
+
+func _find_sliders(node: Node, sliders: Array):
+	for child in node.get_children():
+		if child is HSlider:
+			sliders.append(child)
+		elif child.get_child_count() > 0:
+			_find_sliders(child, sliders)
 
 func _on_settings_pressed():
 	settings_panel.visible = true

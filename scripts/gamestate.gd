@@ -87,10 +87,14 @@ func reset():
 	drill_damage = 0.25
 	base_cooling_rate = 0.5
 	last_upgrade_depth = 0.0
-	next_upgrade_depth = 300.0 # STARTING AT 300m
+	next_upgrade_depth = 300.0
 	game_active = true
 	run_upgrades.clear()
 	_apply_permanent_upgrades()
+	
+	# Reset ad cooldowns for new run
+	if has_node("/root/AdManager"):
+		get_node("/root/AdManager").reset_cooldowns()
 	
 	heat_changed.emit(heat, max_heat)
 	durability_changed.emit(durability, max_durability)
@@ -117,6 +121,7 @@ func _apply_permanent_upgrades():
 
 func add_heat(value: float):
 	if not game_active: return
+	if invulnerable and value > 0: return
 	var depth_mult = 1.0 + depth / 1000.0
 	var final_value = value * depth_mult * (1.0 - heat_resistance) if value > 0 else value
 	heat = clamp(heat + final_value, 0, max_heat)
@@ -127,6 +132,7 @@ func add_heat(value: float):
 
 func add_wear(value: float):
 	if not game_active: return
+	if invulnerable and value > 0: return
 	var depth_mult = 1.0 + depth / 800.0
 	var reduced_value = value * depth_mult * (1.0 - wear_reduction)
 	durability = clamp(durability - reduced_value, 0, max_durability)
@@ -222,6 +228,7 @@ func get_random_upgrades(count: int = 3) -> Array:
 
 func _process(delta):
 	if not game_active: return
+	if get_tree().paused: return
 	if combo_timer > 0:
 		combo_timer -= delta
 		if combo_timer <= 0:
@@ -262,9 +269,14 @@ func increment_combo():
 	combo_timer = COMBO_TIMEOUT
 	combo_updated.emit(combo_counter)
 
+var invulnerable: bool = false
+
 func continue_run():
 	heat = max_heat * 0.5
 	durability = min(durability + 30, max_durability)
 	game_active = true
+	invulnerable = true
+	await get_tree().create_timer(2.0).timeout
+	invulnerable = false
 	heat_changed.emit(heat, max_heat)
 	durability_changed.emit(durability, max_durability)
