@@ -4,6 +4,9 @@ var gs = null
 var pause_menu: Control = null
 var touch_controls: Control = null
 var consumables_vbox: VBoxContainer = null
+var safe_area: Control = null
+var heat_bar: ProgressBar = null
+var dura_bar: ProgressBar = null
 
 func set_touch_visible(p_visible: bool):
 	if touch_controls: touch_controls.visible = p_visible
@@ -19,6 +22,19 @@ func _ready():
 	for child in get_children():
 		child.queue_free()
 	
+	# Create a centered safe area for all UI
+	safe_area = Control.new()
+	safe_area.name = "SafeContainer"
+	safe_area.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	safe_area.anchor_bottom = 1.0
+	safe_area.offset_left = -540
+	safe_area.offset_right = 540
+	safe_area.offset_top = 0
+	safe_area.offset_bottom = 0
+	safe_area.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	safe_area.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(safe_area)
+
 	gs = get_node("/root/GameState")
 	if gs:
 		gs.heat_changed.connect(_on_heat_changed)
@@ -39,19 +55,19 @@ func _ready():
 func _setup_hud():
 	# 1. DEPTH PILL (TOP CENTER)
 	var depth_pill = _create_pill("DepthPill", Vector2(540, 80), Color(0.1, 0.5, 1.0), "📏", "0 m")
-	add_child(depth_pill)
+	safe_area.add_child(depth_pill)
 	# Force center align using pivot
 	depth_pill.position = Vector2(540 - depth_pill.size.x / 2, 70)
 
 	# 2. COINS PILL (TOP RIGHT)
 	var coin_pill = _create_pill("CoinPill", Vector2(1010, 80), Color(1.0, 0.8, 0.2), "💰", "0")
-	add_child(coin_pill)
+	safe_area.add_child(coin_pill)
 	# Align to right edge with 70px margin
 	coin_pill.position = Vector2(1010 - coin_pill.size.x, 70)
 
 	# 3. STATUS BARS (TOP LEFT)
-	_create_status_bar("DuraBar", Vector2(150, 80), Color(0.2, 0.9, 0.4), "⚡")
-	_create_status_bar("HeatBar", Vector2(150, 180), Color(1.0, 0.3, 0.1), "🔥")
+	dura_bar = _create_status_bar("DuraBar", Vector2(70, 80), Color(0.2, 0.9, 0.4), "⚡")
+	heat_bar = _create_status_bar("HeatBar", Vector2(70, 180), Color(1.0, 0.3, 0.1), "🔥")
 
 	# 4. PAUSE BUTTON (TOP RIGHT)
 	_create_premium_pause_btn(Vector2(950, 240))
@@ -63,7 +79,7 @@ func _create_consumables_bar():
 	consumables_vbox = VBoxContainer.new()
 	consumables_vbox.position = Vector2(910, 400) # Below pause button
 	consumables_vbox.add_theme_constant_override("separation", 25)
-	add_child(consumables_vbox)
+	safe_area.add_child(consumables_vbox)
 	_refresh_consumables()
 
 func _refresh_consumables():
@@ -153,7 +169,7 @@ func _create_status_bar(bar_name: String, pos: Vector2, color: Color, icon: Stri
 	var container = Control.new()
 	container.name = bar_name
 	container.position = pos
-	add_child(container)
+	safe_area.add_child(container)
 	
 	# The background track for the bar
 	var bg = Panel.new()
@@ -201,9 +217,11 @@ func _create_status_bar(bar_name: String, pos: Vector2, color: Color, icon: Stri
 	il.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	il.size = Vector2(84, 84)
 	circle.add_child(il)
+	
+	return bar
 
 func _create_touch_controls():
-	touch_controls = Control.new(); touch_controls.name = "TouchControls"; add_child(touch_controls)
+	touch_controls = Control.new(); touch_controls.name = "TouchControls"; safe_area.add_child(touch_controls)
 	
 	var left = _create_pop_control_btn("◀", Vector2(200, 1680), Color(0.2, 0.6, 1.0))
 	left.button_down.connect(func(): Input.action_press("ui_left"))
@@ -226,7 +244,7 @@ func _create_pop_control_btn(txt: String, pos: Vector2, color: Color) -> Button:
 func _create_premium_pause_btn(pos: Vector2):
 	var btn = Button.new(); btn.position = pos - Vector2(55, 55); btn.custom_minimum_size = Vector2(110, 110)
 	var s = StyleBoxFlat.new(); s.bg_color = Color(0.1, 0.1, 0.15, 0.9); s.set_corner_radius_all(55); s.border_width_left = 4; s.border_width_top = 4; s.border_width_right = 4; s.border_width_bottom = 4; s.border_color = Color(0.4, 0.7, 1.0)
-	btn.add_theme_stylebox_override("normal", s); btn.pressed.connect(_toggle_pause); add_child(btn)
+	btn.add_theme_stylebox_override("normal", s); btn.pressed.connect(_toggle_pause); safe_area.add_child(btn)
 	var ic = Label.new(); ic.text = "⏸"; ic.add_theme_font_size_override("font_size", 60); ic.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; ic.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; ic.size = Vector2(110, 110); btn.add_child(ic)
 
 func _toggle_pause():
@@ -280,13 +298,15 @@ func _quit_to_menu():
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 func spawn_bright_text(pos: Vector2, txt: String, color: Color):
-	var lbl = Label.new(); lbl.text = txt; lbl.add_theme_font_size_override("font_size", 42); lbl.add_theme_color_override("font_color", color); lbl.add_theme_color_override("font_outline_color", Color.BLACK); lbl.add_theme_constant_override("outline_size", 10); add_child(lbl)
-	lbl.global_position = pos; var tw = create_tween().set_parallel(true); tw.tween_property(lbl, "global_position:y", pos.y - 180, 1.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT); tw.tween_property(lbl, "modulate:a", 0.0, 1.5); tw.chain().tween_callback(lbl.queue_free)
+	var lbl = Label.new(); lbl.text = txt; lbl.add_theme_font_size_override("font_size", 42); lbl.add_theme_color_override("font_color", color); lbl.add_theme_color_override("font_outline_color", Color.BLACK); lbl.add_theme_constant_override("outline_size", 10); safe_area.add_child(lbl)
+	lbl.position = pos; var tw = create_tween().set_parallel(true); tw.tween_property(lbl, "position:y", pos.y - 180, 1.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT); tw.tween_property(lbl, "modulate:a", 0.0, 1.5); tw.chain().tween_callback(lbl.queue_free)
 
 func _on_heat_changed(val, max_val):
-	var b = get_node_or_null("HeatBar/Bar"); if b: b.value = (val / max_val) * 100
+	if heat_bar:
+		heat_bar.value = (float(val) / float(max_val)) * 100.0
 func _on_durability_changed(val, max_val):
-	var b = get_node_or_null("DuraBar/Bar"); if b: b.value = (val / max_val) * 100
+	if dura_bar:
+		dura_bar.value = (float(val) / float(max_val)) * 100.0
 func _on_coins_changed(val):
 	var pill = find_child("CoinPill", true, false)
 	if pill:
